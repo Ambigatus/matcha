@@ -1,0 +1,46 @@
+# Node.js dependencies
+node_modules/
+
+# npm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# dotenv environment variables file
+.env
+
+# TypeScript files
+*.tsbuildinfo
+
+# build output
+/dist
+/build
+
+# Docker
+docker-compose.override.yml
+Dockerfile.dev
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# VSCode settings
+.vscode/
+
+# IDEs
+.idea/
+
+# PostgreSQL data
+pgdata/
+
+# Coverage directory used by testing tools
+coverage/
+
+# MacOS-specific files
+.AppleDouble
+.LSOverride
