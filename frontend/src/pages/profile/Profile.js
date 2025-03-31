@@ -71,12 +71,118 @@ const Profile = () => {
                                 />
                             ) : (
                                 <div className="h-32 w-32 flex items-center justify-center bg-gray-200 rounded-full">
-                  <span className="text-3xl font-bold text-gray-400">
-                    {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
-                  </span>
+                                  <span className="text-3xl font-bold text-gray-400">
+                                    {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
+                                  </span>
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+
+                {/* Profile Info */}
+                <div className="pt-16 px-8 pb-8">
+                    <div className="text-center mb-6">
+                        <h1 className="text-2xl font-bold text-gray-800">
+                            {user.firstName} {user.lastName}
+                        </h1>
+                        <p className="text-indigo-600">@{user.username}</p>
+                        <div className="flex justify-center items-center mt-2">
+                            <div className="flex items-center text-gray-600 mr-4">
+                                <svg className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                </svg>
+                                <span>{profile.last_location || 'Location not set'}</span>
+                            </div>
+                            <div className="flex items-center text-gray-600">
+                                <svg className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 2a6 6 0 100 12 6 6 0 000-12z" clipRule="evenodd" />
+                                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                </svg>
+                                <span>Fame Rating: {profile.fame_rating || 0}/100</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end mb-6">
+                        <Link
+                            to="/profile/edit"
+                            className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors duration-200"
+                        >
+                            Edit Profile
+                        </Link>
+                    </div>
+
+                    {/* Profile Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-800 mb-3">About Me</h2>
+                            <p className="text-gray-600">
+                                {profile.bio || 'No biography provided yet.'}
+                            </p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-800 mb-3">Details</h2>
+                            <ul className="space-y-2">
+                                <li className="flex">
+                                    <span className="font-medium text-gray-700 w-32">Gender:</span>
+                                    <span className="text-gray-600">{profile.gender || 'Not specified'}</span>
+                                </li>
+                                <li className="flex">
+                                    <span className="font-medium text-gray-700 w-32">Preference:</span>
+                                    <span className="text-gray-600">{profile.sexual_preference || 'Not specified'}</span>
+                                </li>
+                                <li className="flex">
+                                    <span className="font-medium text-gray-700 w-32">Birth Date:</span>
+                                    <span className="text-gray-600">
+                                    {profile.birth_date
+                                        ? new Date(profile.birth_date).toLocaleDateString()
+                                        : 'Not specified'
+                                    }
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    {/* Interests */}
+                    <div className="mb-8">
+                        <h2 className="text-lg font-semibold text-gray-800 mb-3">Interests</h2>
+                        {profile.tags && profile.tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                                {profile.tags.map(tag => (
+                                    <span
+                                        key={tag.tag_id}
+                                        className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
+                                    >
+                                    {tag.tag_name}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-gray-600">No interests added yet.</p>
+                        )}
+                    </div>
+
+                    {/* Photos */}
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-800 mb-3">Photos</h2>
+                        {profile.photos && profile.photos.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                {profile.photos.map(photo => (
+                                    <div key={photo.photo_id} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                        <img
+                                            src={`/${photo.file_path}`}
+                                            alt="User gallery"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-gray-600">No photos added yet.</p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -119,109 +225,3 @@ const Profile = () => {
 };
 
 export default Profile;
-
-{/* Profile Info */}
-<div className="pt-16 px-8 pb-8">
-    <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">
-            {user.firstName} {user.lastName}
-        </h1>
-        <p className="text-indigo-600">@{user.username}</p>
-        <div className="flex justify-center items-center mt-2">
-            <div className="flex items-center text-gray-600 mr-4">
-                <svg className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                </svg>
-                <span>{profile.last_location || 'Location not set'}</span>
-            </div>
-            <div className="flex items-center text-gray-600">
-                <svg className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 2a6 6 0 100 12 6 6 0 000-12z" clipRule="evenodd" />
-                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-                <span>Fame Rating: {profile.fame_rating || 0}/100</span>
-            </div>
-        </div>
-    </div>
-
-    <div className="flex justify-end mb-6">
-        <Link
-            to="/profile/edit"
-            className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors duration-200"
-        >
-            Edit Profile
-        </Link>
-    </div>
-
-    {/* Profile Details */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">About Me</h2>
-            <p className="text-gray-600">
-                {profile.bio || 'No biography provided yet.'}
-            </p>
-        </div>
-
-        <div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">Details</h2>
-            <ul className="space-y-2">
-                <li className="flex">
-                    <span className="font-medium text-gray-700 w-32">Gender:</span>
-                    <span className="text-gray-600">{profile.gender || 'Not specified'}</span>
-                </li>
-                <li className="flex">
-                    <span className="font-medium text-gray-700 w-32">Preference:</span>
-                    <span className="text-gray-600">{profile.sexual_preference || 'Not specified'}</span>
-                </li>
-                <li className="flex">
-                    <span className="font-medium text-gray-700 w-32">Birth Date:</span>
-                    <span className="text-gray-600">
-                    {profile.birth_date
-                        ? new Date(profile.birth_date).toLocaleDateString()
-                        : 'Not specified'
-                    }
-                  </span>
-                </li>
-            </ul>
-        </div>
-    </div>
-
-    {/* Interests */}
-    <div className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">Interests</h2>
-        {profile.tags && profile.tags.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-                {profile.tags.map(tag => (
-                    <span
-                        key={tag.tag_id}
-                        className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
-                    >
-                    {tag.tag_name}
-                  </span>
-                ))}
-            </div>
-        ) : (
-            <p className="text-gray-600">No interests added yet.</p>
-        )}
-    </div>
-
-    {/* Photos */}
-    <div>
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">Photos</h2>
-        {profile.photos && profile.photos.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                {profile.photos.map(photo => (
-                    <div key={photo.photo_id} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                        <img
-                            src={`/${photo.file_path}`}
-                            alt="User gallery"
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                ))}
-            </div>
-        ) : (
-            <p className="text-gray-600">No photos added yet.</p>
-        )}
-    </div>
-</div>
