@@ -1,5 +1,5 @@
 // frontend/src/pages/auth/VerifyEmail.js
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import AuthContext from '../../context/AuthContext';
@@ -10,9 +10,14 @@ const VerifyEmail = () => {
     const [verifying, setVerifying] = useState(true);
     const [verified, setVerified] = useState(false);
     const [error, setError] = useState('');
+    const verificationAttempted = useRef(false);
 
     useEffect(() => {
         const verifyUserEmail = async () => {
+            // Prevent multiple verification attempts
+            if (verificationAttempted.current) return;
+            verificationAttempted.current = true;
+
             try {
                 if (token) {
                     await verifyEmail(token);

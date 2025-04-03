@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { User, Profile } = require('../models');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
+const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
 
 // Register a new user
 exports.register = async (req, res) => {
@@ -13,7 +15,7 @@ exports.register = async (req, res) => {
         // Check if user already exists
         const existingUser = await User.findOne({
             where: {
-                [sequelize.Op.or]: [
+                [Op.or]: [
                     { username },
                     { email }
                 ]
@@ -178,7 +180,7 @@ exports.resetPassword = async (req, res) => {
             where: {
                 password_reset_token: token,
                 password_reset_expires: {
-                    [sequelize.Op.gt]: new Date()
+                    [Op.gt]: new Date()
                 }
             }
         });
