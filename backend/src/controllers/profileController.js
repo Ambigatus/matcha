@@ -1,5 +1,6 @@
 // backend/src/controllers/profileController.js
-const db = require('../utils/db');
+const { User, Profile, Photo, Tag, UserTag } = require('../models');
+const { sequelize } = require('../config/database');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -7,36 +8,41 @@ const fs = require('fs');
 // Get user's own profile
 exports.getMyProfile = async (req, res) => {
     try {
-        // Get profile data
-        const profileResult = await db.query(
-            'SELECT * FROM profiles WHERE user_id = $1',
-            [req.user.id]
-        );
+        // Get profile data with associated data
+        const user = await User.findByPk(req.user.id, {
+            include: [
+                {
+                    model: Profile,
+                    as: 'profile',
+                    attributes: { exclude: ['user_id'] }
+                },
+                {
+                    model: Photo,
+                    as: 'photos',
+                    attributes: ['photo_id', 'file_path', 'is_profile']
+                },
+                {
+                    model: Tag,
+                    as: 'tags',
+                    attributes: ['tag_id', 'tag_name'],
+                    through: { attributes: [] } // Exclude junction table attributes
+                }
+            ]
+        });
 
-        if (profileResult.rows.length === 0) {
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!user.profile) {
             return res.status(404).json({ message: 'Profile not found' });
         }
 
-        // Get user's tags
-        const tagsResult = await db.query(
-            `SELECT t.tag_id, t.tag_name 
-       FROM tags t
-       JOIN user_tags ut ON t.tag_id = ut.tag_id
-       WHERE ut.user_id = $1`,
-            [req.user.id]
-        );
-
-        // Get user's photos
-        const photosResult = await db.query(
-            'SELECT photo_id, file_path, is_profile FROM photos WHERE user_id = $1',
-            [req.user.id]
-        );
-
         // Compile complete profile
         const profile = {
-            ...profileResult.rows[0],
-            tags: tagsResult.rows,
-            photos: photosResult.rows
+            ...user.profile.get({ plain: true }),
+            tags: user.tags,
+            photos: user.photos
         };
 
         res.status(200).json(profile);
@@ -51,14 +57,23 @@ exports.updateProfile = async (req, res) => {
     const { gender, sexualPreference, bio, birthDate, latitude, longitude, lastLocation } = req.body;
 
     try {
+        // Find or create profile
+        const [profile] = await Profile.findOrCreate({
+            where: { user_id: req.user.id },
+            defaults: { user_id: req.user.id }
+        });
+
         // Update profile
-        await db.query(
-            `UPDATE profiles 
-       SET gender = $1, sexual_preference = $2, bio = $3, birth_date = $4, 
-           latitude = $5, longitude = $6, last_location = $7, last_active = NOW()
-       WHERE user_id = $8`,
-            [gender, sexualPreference, bio, birthDate, latitude, longitude, lastLocation, req.user.id]
-        );
+        await profile.update({
+            gender,
+            sexual_preference: sexualPreference,
+            bio,
+            birth_date: birthDate,
+            latitude,
+            longitude,
+            last_location: lastLocation,
+            last_active: new Date()
+        });
 
         res.status(200).json({ message: 'Profile updated successfully' });
     } catch (error) {
@@ -73,38 +88,28 @@ exports.addTag = async (req, res) => {
 
     try {
         // Check if tag exists, if not create it
-        let tagResult = await db.query(
-            'SELECT tag_id FROM tags WHERE tag_name = $1',
-            [tagName]
-        );
-
-        let tagId;
-        if (tagResult.rows.length === 0) {
-            // Create new tag
-            const newTagResult = await db.query(
-                'INSERT INTO tags (tag_name) VALUES ($1) RETURNING tag_id',
-                [tagName]
-            );
-            tagId = newTagResult.rows[0].tag_id;
-        } else {
-            tagId = tagResult.rows[0].tag_id;
-        }
+        const [tag, created] = await Tag.findOrCreate({
+            where: { tag_name: tagName },
+            defaults: { tag_name: tagName }
+        });
 
         // Check if user already has this tag
-        const userTagResult = await db.query(
-            'SELECT * FROM user_tags WHERE user_id = $1 AND tag_id = $2',
-            [req.user.id, tagId]
-        );
+        const existingUserTag = await UserTag.findOne({
+            where: {
+                user_id: req.user.id,
+                tag_id: tag.tag_id
+            }
+        });
 
-        if (userTagResult.rows.length > 0) {
+        if (existingUserTag) {
             return res.status(400).json({ message: 'Tag already added to your profile' });
         }
 
         // Add tag to user
-        await db.query(
-            'INSERT INTO user_tags (user_id, tag_id) VALUES ($1, $2)',
-            [req.user.id, tagId]
-        );
+        await UserTag.create({
+            user_id: req.user.id,
+            tag_id: tag.tag_id
+        });
 
         res.status(201).json({ message: 'Tag added successfully' });
     } catch (error) {
@@ -118,10 +123,12 @@ exports.removeTag = async (req, res) => {
     const { tagId } = req.params;
 
     try {
-        await db.query(
-            'DELETE FROM user_tags WHERE user_id = $1 AND tag_id = $2',
-            [req.user.id, tagId]
-        );
+        await UserTag.destroy({
+            where: {
+                user_id: req.user.id,
+                tag_id: tagId
+            }
+        });
 
         res.status(200).json({ message: 'Tag removed successfully' });
     } catch (error) {
@@ -170,28 +177,28 @@ exports.uploadPhoto = async (req, res) => {
 
         try {
             // Check if user already has 5 photos
-            const photoCount = await db.query(
-                'SELECT COUNT(*) FROM photos WHERE user_id = $1',
-                [req.user.id]
-            );
+            const photoCount = await Photo.count({
+                where: { user_id: req.user.id }
+            });
 
-            if (parseInt(photoCount.rows[0].count) >= 5) {
+            if (photoCount >= 5) {
                 // Delete the uploaded file since we can't use it
                 fs.unlinkSync(req.file.path);
                 return res.status(400).json({ message: 'Maximum of 5 photos allowed' });
             }
 
             // Save photo record in database
-            const isFirstPhoto = parseInt(photoCount.rows[0].count) === 0;
-            const result = await db.query(
-                'INSERT INTO photos (user_id, file_path, is_profile) VALUES ($1, $2, $3) RETURNING photo_id',
-                [req.user.id, req.file.path, isFirstPhoto]
-            );
+            const isFirstPhoto = photoCount === 0;
+            const photo = await Photo.create({
+                user_id: req.user.id,
+                file_path: req.file.path,
+                is_profile: isFirstPhoto
+            });
 
             res.status(201).json({
                 message: 'Photo uploaded successfully',
                 photo: {
-                    id: result.rows[0].photo_id,
+                    id: photo.photo_id,
                     path: req.file.path,
                     isProfile: isFirstPhoto
                 }
@@ -213,26 +220,37 @@ exports.setProfilePhoto = async (req, res) => {
 
     try {
         // Check if photo exists and belongs to user
-        const photoResult = await db.query(
-            'SELECT * FROM photos WHERE photo_id = $1 AND user_id = $2',
-            [photoId, req.user.id]
-        );
+        const photo = await Photo.findOne({
+            where: {
+                photo_id: photoId,
+                user_id: req.user.id
+            }
+        });
 
-        if (photoResult.rows.length === 0) {
+        if (!photo) {
             return res.status(404).json({ message: 'Photo not found' });
         }
 
-        // Reset all photos to non-profile
-        await db.query(
-            'UPDATE photos SET is_profile = FALSE WHERE user_id = $1',
-            [req.user.id]
-        );
+        // Using a transaction to ensure atomicity
+        await sequelize.transaction(async (t) => {
+            // Reset all photos to non-profile
+            await Photo.update(
+                { is_profile: false },
+                {
+                    where: { user_id: req.user.id },
+                    transaction: t
+                }
+            );
 
-        // Set the selected photo as profile
-        await db.query(
-            'UPDATE photos SET is_profile = TRUE WHERE photo_id = $1',
-            [photoId]
-        );
+            // Set the selected photo as profile
+            await Photo.update(
+                { is_profile: true },
+                {
+                    where: { photo_id: photoId },
+                    transaction: t
+                }
+            );
+        });
 
         res.status(200).json({ message: 'Profile photo updated successfully' });
     } catch (error) {
@@ -247,41 +265,43 @@ exports.deletePhoto = async (req, res) => {
 
     try {
         // Get photo details
-        const photoResult = await db.query(
-            'SELECT * FROM photos WHERE photo_id = $1 AND user_id = $2',
-            [photoId, req.user.id]
-        );
+        const photo = await Photo.findOne({
+            where: {
+                photo_id: photoId,
+                user_id: req.user.id
+            }
+        });
 
-        if (photoResult.rows.length === 0) {
+        if (!photo) {
             return res.status(404).json({ message: 'Photo not found' });
         }
 
-        const photo = photoResult.rows[0];
         const isProfilePhoto = photo.is_profile;
+        const filePath = photo.file_path;
 
-        // Delete photo from database
-        await db.query(
-            'DELETE FROM photos WHERE photo_id = $1',
-            [photoId]
-        );
+        // Using a transaction to ensure atomicity
+        await sequelize.transaction(async (t) => {
+            // Delete photo from database
+            await photo.destroy({ transaction: t });
+
+            // If this was a profile photo, set another photo as profile if available
+            if (isProfilePhoto) {
+                const remainingPhoto = await Photo.findOne({
+                    where: { user_id: req.user.id },
+                    transaction: t
+                });
+
+                if (remainingPhoto) {
+                    await remainingPhoto.update(
+                        { is_profile: true },
+                        { transaction: t }
+                    );
+                }
+            }
+        });
 
         // Delete file from filesystem
-        fs.unlinkSync(photo.file_path);
-
-        // If this was a profile photo, set another photo as profile if available
-        if (isProfilePhoto) {
-            const remainingPhotos = await db.query(
-                'SELECT photo_id FROM photos WHERE user_id = $1 LIMIT 1',
-                [req.user.id]
-            );
-
-            if (remainingPhotos.rows.length > 0) {
-                await db.query(
-                    'UPDATE photos SET is_profile = TRUE WHERE photo_id = $1',
-                    [remainingPhotos.rows[0].photo_id]
-                );
-            }
-        }
+        fs.unlinkSync(filePath);
 
         res.status(200).json({ message: 'Photo deleted successfully' });
     } catch (error) {

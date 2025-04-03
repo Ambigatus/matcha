@@ -1,6 +1,6 @@
-// backend/src/middlewares/auth.js
+// backend/src/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const db = require('../utils/db');
+const { User } = require('../models');
 
 exports.protect = async (req, res, next) => {
     try {
@@ -18,23 +18,22 @@ exports.protect = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Get user
-        const result = await db.query(
-            'SELECT user_id, username, email, first_name, last_name, is_admin FROM users WHERE user_id = $1',
-            [decoded.id]
-        );
+        const user = await User.findByPk(decoded.id, {
+            attributes: ['user_id', 'username', 'email', 'first_name', 'last_name', 'is_admin']
+        });
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(401).json({ message: 'Not authorized, user not found' });
         }
 
         // Attach user to request
         req.user = {
-            id: result.rows[0].user_id,
-            username: result.rows[0].username,
-            email: result.rows[0].email,
-            firstName: result.rows[0].first_name,
-            lastName: result.rows[0].last_name,
-            isAdmin: result.rows[0].is_admin
+            id: user.user_id,
+            username: user.username,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            isAdmin: user.is_admin
         };
 
         next();

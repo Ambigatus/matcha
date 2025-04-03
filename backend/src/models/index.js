@@ -1,28 +1,49 @@
+// backend/src/models/index.js
 const User = require('./User');
-const ProfilePicture = require('./ProfilePicture');
-const Interest = require('./Interest');
+const Profile = require('./Profile');
+const Photo = require('./Photo');
+const { Tag, UserTag } = require('./Tag');
 
 // Setup associations
-User.hasMany(ProfilePicture, {
-    foreignKey: 'userId',
-    as: 'profilePictures'
+User.hasOne(Profile, {
+    foreignKey: 'user_id',
+    as: 'profile'
 });
-ProfilePicture.belongsTo(User, {
-    foreignKey: 'userId',
+Profile.belongsTo(User, {
+    foreignKey: 'user_id',
     as: 'user'
 });
 
-User.hasMany(Interest, {
-    foreignKey: 'userId',
-    as: 'interests'
+User.hasMany(Photo, {
+    foreignKey: 'user_id',
+    as: 'photos'
 });
-Interest.belongsTo(User, {
-    foreignKey: 'userId',
+Photo.belongsTo(User, {
+    foreignKey: 'user_id',
     as: 'user'
 });
 
-module.exports = {
+User.belongsToMany(Tag, {
+    through: UserTag,
+    foreignKey: 'user_id',
+    otherKey: 'tag_id',
+    as: 'tags'
+});
+
+Tag.belongsToMany(User, {
+    through: UserTag,
+    foreignKey: 'tag_id',
+    otherKey: 'user_id',
+    as: 'users'
+});
+
+// For backwards compatibility with legacy code
+const models = {
     User,
-    ProfilePicture,
-    Interest
+    Profile,
+    Photo,
+    Tag,
+    UserTag
 };
+
+module.exports = models;

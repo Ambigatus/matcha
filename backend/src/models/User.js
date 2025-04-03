@@ -1,3 +1,4 @@
+// backend/src/models/User.js
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/database');
 const bcrypt = require('bcrypt');
@@ -9,18 +10,27 @@ class User extends Model {
     }
 
     // Method to generate public profile (excluding sensitive info)
-    toPublicProfile() {
-        const { id, username, email, firstName, lastName, profileCompleted } = this;
-        return { id, username, firstName, lastName, profileCompleted };
+    toPublicJSON() {
+        const { user_id, username, email, first_name, last_name, is_verified, is_online, last_login } = this;
+        return {
+            id: user_id,
+            username,
+            email,
+            firstName: first_name,
+            lastName: last_name,
+            isVerified: is_verified,
+            isOnline: is_online,
+            lastLogin: last_login
+        };
     }
 }
 
 User.init({
     // Basic Authentication Fields
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
+    user_id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
     },
     username: {
         type: DataTypes.STRING(50),
@@ -41,77 +51,65 @@ User.init({
     },
     password: {
         type: DataTypes.STRING(255),
-        allowNull: false,
-        validate: {
-            len: [8, 255] // Minimum password length
-        }
+        allowNull: false
     },
-
-    // Personal Information
-    firstName: {
+    first_name: {
         type: DataTypes.STRING(50),
         allowNull: false
     },
-    lastName: {
+    last_name: {
         type: DataTypes.STRING(50),
         allowNull: false
     },
 
     // Profile Completion and Verification
-    profileCompleted: {
+    is_verified: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
     },
-    emailVerified: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
-    },
-    verificationToken: {
+    verification_token: {
         type: DataTypes.STRING(255),
         allowNull: true
     },
-
-    // Dating Profile Fields
-    gender: {
-        type: DataTypes.ENUM('male', 'female', 'other'),
+    password_reset_token: {
+        type: DataTypes.STRING(255),
         allowNull: true
     },
-    sexualPreference: {
-        type: DataTypes.ENUM('heterosexual', 'homosexual', 'bisexual'),
-        defaultValue: 'bisexual'
-    },
-    biography: {
-        type: DataTypes.TEXT,
-        allowNull: true
-    },
-
-    // Location and Tracking
-    latitude: {
-        type: DataTypes.DECIMAL(10, 8),
-        allowNull: true
-    },
-    longitude: {
-        type: DataTypes.DECIMAL(11, 8),
-        allowNull: true
-    },
-    lastLogin: {
+    password_reset_expires: {
         type: DataTypes.DATE,
         allowNull: true
     },
 
-    // Fame Rating
-    fameRating: {
-        type: DataTypes.FLOAT,
-        defaultValue: 0,
-        validate: {
-            min: 0,
-            max: 100
-        }
+    // Status Fields
+    is_admin: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    is_online: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    last_login: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+
+    // Timestamps
+    created_at: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW
     }
 }, {
     sequelize,
     modelName: 'User',
     tableName: 'users',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     hooks: {
         // Hash password before creating or updating
         beforeCreate: async (user) => {
@@ -128,17 +126,5 @@ User.init({
         }
     }
 });
-
-// Associated Models (to be created later)
-User.associate = (models) => {
-    User.hasMany(models.ProfilePicture, {
-        foreignKey: 'userId',
-        as: 'profilePictures'
-    });
-    User.hasMany(models.Interest, {
-        foreignKey: 'userId',
-        as: 'interests'
-    });
-};
 
 module.exports = User;

@@ -7,7 +7,9 @@ const morgan = require('morgan');
 const path = require('path');
 
 // Import database connection
-const db = require('./utils/db');
+const { sequelize, initializeDatabase } = require('./config/database');
+// Import Sequelize models
+const models = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -34,10 +36,11 @@ app.use('/api/profile', profileRoutes);
 // Test database connection
 app.get('/api/test-db', async (req, res) => {
     try {
-        const result = await db.query('SELECT NOW()');
+        const result = await sequelize.query('SELECT NOW()');
         res.json({
             message: 'Database connection successful',
-            timestamp: result.rows[0].now
+            timestamp: result[0][0].now,
+            models: Object.keys(models)
         });
     } catch (error) {
         console.error('Database connection error:', error);
@@ -68,9 +71,23 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`API is available at http://localhost:${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start server after database initialization
+const startServer = async () => {
+    try {
+        // Initialize database and sync models
+        await initializeDatabase();
+
+        // Start the server
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+            console.log(`API is available at http://localhost:${PORT}`);
+            console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+// Start the server
+startServer();

@@ -2,7 +2,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const db = require('../utils/db');
+const { User, Profile } = require('../models');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 
 // Register a new user
@@ -11,37 +11,36 @@ exports.register = async (req, res) => {
 
     try {
         // Check if user already exists
-        const userCheck = await db.query(
-            'SELECT * FROM users WHERE username = $1 OR email = $2',
-            [username, email]
-        );
+        const existingUser = await User.findOne({
+            where: {
+                [sequelize.Op.or]: [
+                    { username },
+                    { email }
+                ]
+            }
+        });
 
-        if (userCheck.rows.length > 0) {
+        if (existingUser) {
             return res.status(400).json({ message: 'Username or email already exists' });
         }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
 
         // Generate verification token
         const verificationToken = crypto.randomBytes(20).toString('hex');
 
-        // Insert new user
-        const result = await db.query(
-            `INSERT INTO users 
-       (username, email, password, first_name, last_name, verification_token) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id`,
-            [username, email, hashedPassword, firstName, lastName, verificationToken]
-        );
-
-        const userId = result.rows[0].user_id;
+        // Create new user
+        const user = await User.create({
+            username,
+            email,
+            first_name: firstName,
+            last_name: lastName,
+            password, // Will be hashed by the model hook
+            verification_token: verificationToken
+        });
 
         // Create empty profile
-        await db.query(
-            'INSERT INTO profiles (user_id) VALUES ($1)',
-            [userId]
-        );
+        await Profile.create({
+            user_id: user.user_id
+        });
 
         // Send verification email
         sendVerificationEmail(email, verificationToken);
@@ -60,14 +59,17 @@ exports.verifyEmail = async (req, res) => {
     const { token } = req.params;
 
     try {
-        const result = await db.query(
-            'UPDATE users SET is_verified = TRUE WHERE verification_token = $1 RETURNING user_id',
-            [token]
-        );
+        const user = await User.findOne({
+            where: { verification_token: token }
+        });
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(400).json({ message: 'Invalid or expired verification token' });
         }
+
+        user.is_verified = true;
+        user.verification_token = null;
+        await user.save();
 
         res.status(200).json({ message: 'Email verified successfully. You can now log in.' });
     } catch (error) {
@@ -82,16 +84,11 @@ exports.login = async (req, res) => {
 
     try {
         // Get user
-        const result = await db.query(
-            'SELECT * FROM users WHERE username = $1',
-            [username]
-        );
+        const user = await User.findOne({ where: { username } });
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
-
-        const user = result.rows[0];
 
         // Check if account is verified
         if (!user.is_verified) {
@@ -99,17 +96,16 @@ exports.login = async (req, res) => {
         }
 
         // Check password
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await user.validatePassword(password);
 
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
         // Update last login and online status
-        await db.query(
-            'UPDATE users SET last_login = NOW(), is_online = TRUE WHERE user_id = $1',
-            [user.user_id]
-        );
+        user.last_login = new Date();
+        user.is_online = true;
+        await user.save();
 
         // Generate JWT token
         const token = jwt.sign(
@@ -144,20 +140,20 @@ exports.forgotPassword = async (req, res) => {
         const resetToken = crypto.randomBytes(20).toString('hex');
         const resetExpires = new Date(Date.now() + 3600000); // 1 hour
 
-        // Save token to user
-        const result = await db.query(
-            `UPDATE users 
-       SET password_reset_token = $1, password_reset_expires = $2 
-       WHERE email = $3 RETURNING user_id`,
-            [resetToken, resetExpires, email]
-        );
+        // Find user and update reset token
+        const user = await User.findOne({ where: { email } });
 
-        if (result.rows.length === 0) {
+        if (!user) {
             // Don't reveal if email exists or not for security
             return res.status(200).json({
                 message: 'If a matching account was found, a password reset email was sent'
             });
         }
+
+        // Save token to user
+        user.password_reset_token = resetToken;
+        user.password_reset_expires = resetExpires;
+        await user.save();
 
         // Send password reset email
         sendPasswordResetEmail(email, resetToken);
@@ -178,27 +174,24 @@ exports.resetPassword = async (req, res) => {
 
     try {
         // Find user with valid token
-        const result = await db.query(
-            `SELECT user_id FROM users 
-       WHERE password_reset_token = $1 AND password_reset_expires > NOW()`,
-            [token]
-        );
+        const user = await User.findOne({
+            where: {
+                password_reset_token: token,
+                password_reset_expires: {
+                    [sequelize.Op.gt]: new Date()
+                }
+            }
+        });
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(400).json({ message: 'Invalid or expired reset token' });
         }
 
-        // Hash new password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
         // Update password and clear reset token
-        await db.query(
-            `UPDATE users 
-       SET password = $1, password_reset_token = NULL, password_reset_expires = NULL 
-       WHERE user_id = $2`,
-            [hashedPassword, result.rows[0].user_id]
-        );
+        user.password = password; // Will be hashed by model hook
+        user.password_reset_token = null;
+        user.password_reset_expires = null;
+        await user.save();
 
         res.status(200).json({ message: 'Password reset successful. You can now log in.' });
     } catch (error) {
@@ -211,10 +204,12 @@ exports.resetPassword = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         // Update user's online status
-        await db.query(
-            'UPDATE users SET is_online = FALSE WHERE user_id = $1',
-            [req.user.id]
-        );
+        const user = await User.findByPk(req.user.id);
+
+        if (user) {
+            user.is_online = false;
+            await user.save();
+        }
 
         res.status(200).json({ message: 'Logged out successfully' });
     } catch (error) {
