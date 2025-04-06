@@ -1,0 +1,22 @@
+.custom-button {
+    background-color: #8B0000; /* Dark Red */
+    color: #ffffff; /* White */
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    margin: 5%;
+}
+
+.custom-button:hover {
+    background-color: #d3d3d3; /* Lightgray */
+    color: #8B0000; /* Dark Red */
+    border: 1px solid #8B0000; /* Dark Red */
+}
+
+.custom-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}

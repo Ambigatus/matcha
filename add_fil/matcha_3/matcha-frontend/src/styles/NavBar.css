@@ -1,0 +1,68 @@
+/* styles/NavBar.css */
+
+.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: #8B0000; /* Dark Red */
+    color: #ffffff; /* White */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1rem;
+    box-shadow: 0 2px 4px rgba(211, 211, 211, 0.5); /* Lightgray shadow */
+}
+
+.navbar ul {
+    list-style: none;
+    display: flex;
+    margin: 0;
+    padding: 0;
+}
+
+.navbar li {
+    margin-right: 4rem;
+}
+
+.navbar a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+    text-transform: uppercase;
+}
+
+.navbar a:hover {
+    color: 	rgb(56,56,56);
+}
+
+.navbar.dark-mode {
+    background-color: rgb(61, 49, 90);
+}
+
+.navbar .logout-btn {
+    background-color: transparent;
+    border: 1px solid #ffffff;
+    color: #ffffff;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.navbar .logout-btn:hover {
+    background-color: #d3d3d3;
+    color: #8B0000;
+}
+
+.toggle-btn {
+    border: 1px solid currentColor;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    text-transform: uppercase;
+}
+
+.toggle-btn:hover {
+    background-color: transparent;
+}

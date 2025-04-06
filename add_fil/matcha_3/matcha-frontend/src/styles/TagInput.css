@@ -1,0 +1,30 @@
+/* TagInput.css */
+
+.tag-input {
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.ReactTags__tag {
+    /*background-color: #007bff;*/
+    color: white;
+    padding: 4px 8px;
+    border-radius: 3px;
+    margin: 2px;
+    display: inline-block;
+}
+
+.ReactTags__remove {
+    margin-left: 8px;
+    cursor: pointer;
+}
+
+.ReactTags__tagInputField {
+    outline: none;
+    padding: 4px;
+    font-size: 14px;
+    background-color: white;
+    border: 1px solid #8B0000; /* Dark Red */
+    color: black;
+}

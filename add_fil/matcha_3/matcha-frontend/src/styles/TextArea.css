@@ -1,0 +1,34 @@
+/* Container for the textarea group */
+.textarea-group {
+    flex-direction: row;
+    margin: 0 auto;
+    padding: 1%;
+
+}
+
+/* Label styling */
+.textarea-group__label {
+    margin-bottom: 0.5rem;
+    font-size: 16px;
+    color: white; /* Dark Red */
+}
+
+/* Textarea element styling */
+.textarea-group__textarea {
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #8B0000; /* Dark Red */
+    border-radius: 5px;
+    background-color: #ffffff; /* White */
+    color: #333; /* Dark Gray for text */
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    resize: vertical; /* Allows vertical resizing only */
+}
+
+/* Focus styles */
+.textarea-group__textarea:focus {
+    box-shadow: 0 0 5px rgba(211, 211, 211, 0.8);
+    outline: none;
+    border: 1px solid #8B0000; /* Dark Red */
+}
+

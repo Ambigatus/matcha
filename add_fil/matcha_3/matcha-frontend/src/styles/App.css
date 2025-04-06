@@ -1,0 +1,68 @@
+#root {
+  /*max-width: 1280px;*/
+  margin: 0 auto;
+  /*padding: 2rem;*/
+  text-align: center;
+  width: 100%;
+}
+
+.logo {
+  will-change: filter;
+  transition: filter 300ms;
+  line-height: 0;
+  font-size: 2rem;
+  text-transform: uppercase;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+.logo_container {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between logo and text */
+}
+
+.logo_container img {
+  width: 5%;
+  height: auto;
+}
+
+.transparent-box {
+  background: rgba(0,0,0,-0.5);
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5px); /* создаёт эффект размытия фона (стекло) */
+  -webkit-backdrop-filter: blur(5px); /* для поддержки в Safari */
+  width: 40%;
+  height: 40%;
+  margin: 5% auto;
+}
+
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}

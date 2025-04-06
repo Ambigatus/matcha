@@ -1,0 +1,40 @@
+.profile-container {
+    background-color: #f0f0f0; /* Light gray background */
+    color: #333; /* Dark text color */
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.profile-heading {
+    color: #2c3e50; /* Darker heading color */
+    margin-bottom: 16px;
+}
+
+.profile-detail {
+    margin-bottom: 12px;
+}
+
+.tag_input {
+    color: white;
+    cursor: pointer;
+    margin-right: 10px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/*.edit-button {*/
+/*    background-color: #3498db; !* Button background color *!*/
+/*    color: #fff; !* Button text color *!*/
+/*    padding: 10px 20px;*/
+/*    border: none;*/
+/*    border-radius: 4px;*/
+/*    cursor: pointer;*/
+/*    transition: background-color 0.3s ease;*/
+/*}*/
+
+/*.edit-button:hover {*/
+/*    background-color: #2980b9; !* Darker shade on hover *!*/
+/*}*/
