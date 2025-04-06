@@ -1,19 +1,19 @@
 // frontend/src/pages/profile/ProfileEdit.js
 import React, { useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../../context/AuthContext';
+import PhotoManagement from './PhotoManagement';
+import TagsInput from '../../components/profile/TagsInput';
 
 const ProfileEdit = () => {
     const { user } = useContext(AuthContext);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [savingProfile, setSavingProfile] = useState(false);
-    const [loadingTags, setLoadingTags] = useState(false);
-    const [newTag, setNewTag] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -66,77 +66,44 @@ const ProfileEdit = () => {
         }
     };
 
-    const handleAddTag = async () => {
-        // Validate tag format (starts with # and alphanumeric)
-        if (!newTag.startsWith('#')) {
-            setNewTag('#' + newTag);
-        }
-
-        const tagRegex = /^#[a-zA-Z0-9]+$/;
-        if (!tagRegex.test(newTag)) {
-            toast.error('Tags must start with # and contain only letters and numbers.');
-            return;
-        }
-
-        try {
-            setLoadingTags(true);
-            await axios.post('/api/profile/tags', { tagName: newTag });
-            // Refresh profile to get updated tags
-            const response = await axios.get('/api/profile/me');
-            setProfile(response.data);
-            setNewTag('');
-            toast.success('Tag added successfully!');
-        } catch (error) {
-            toast.error('Failed to add tag. Please try again.');
-            console.error('Error adding tag:', error);
-        } finally {
-            setLoadingTags(false);
-        }
-    };
-
-    const handleRemoveTag = async (tagId) => {
-        try {
-            setLoadingTags(true);
-            await axios.delete(`/api/profile/tags/${tagId}`);
-            // Refresh profile to get updated tags
-            const response = await axios.get('/api/profile/me');
-            setProfile(response.data);
-            toast.success('Tag removed successfully!');
-        } catch (error) {
-            toast.error('Failed to remove tag. Please try again.');
-            console.error('Error removing tag:', error);
-        } finally {
-            setLoadingTags(false);
-        }
-    };
-
     const handleGetLocation = (setFieldValue) => {
         if (!navigator.geolocation) {
             toast.error('Geolocation is not supported by your browser');
             return;
         }
 
+        toast.info('Getting your location...');
+
         navigator.geolocation.getCurrentPosition(
-            (position) => {
+            async (position) => {
                 setFieldValue('latitude', position.coords.latitude);
                 setFieldValue('longitude', position.coords.longitude);
 
-                // Optional: Get location name using reverse geocoding
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        const locationName = data.address?.city || data.address?.town || data.address?.village || data.address?.county || 'Unknown location';
-                        setFieldValue('lastLocation', locationName);
-                    })
-                    .catch(error => {
-                        console.error('Error getting location name:', error);
-                        setFieldValue('lastLocation', 'Location detected');
-                    });
+                // Get location name using OpenStreetMap API
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}&zoom=10`
+                    );
+                    const data = await response.json();
+                    const locationName = data.address?.city ||
+                        data.address?.town ||
+                        data.address?.village ||
+                        data.address?.county ||
+                        'Unknown location';
+
+                    setFieldValue('lastLocation', locationName);
+                    toast.success('Location found: ' + locationName);
+                } catch (error) {
+                    console.error('Error getting location name:', error);
+                    setFieldValue('lastLocation', 'Location detected');
+                    toast.warning('Location coordinates found, but could not determine city name');
+                }
             },
             (error) => {
                 console.error('Error getting location:', error);
                 toast.error('Unable to retrieve your location. Please enter it manually.');
-            }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
         );
     };
 
@@ -159,11 +126,20 @@ const ProfileEdit = () => {
         lastLocation: profile?.last_location || ''
     };
 
+    const isNewProfile = !profile?.gender;
+
     return (
         <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
                 <div className="px-8 py-6 border-b border-gray-200">
-                    <h1 className="text-2xl font-bold text-gray-800">Edit Profile</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">
+                        {isNewProfile ? 'Complete Your Profile' : 'Edit Profile'}
+                    </h1>
+                    {isNewProfile && (
+                        <p className="mt-2 text-gray-600">
+                            Please fill out your profile information to start matching with other users.
+                        </p>
+                    )}
                 </div>
 
                 <div className="p-8">
@@ -182,7 +158,7 @@ const ProfileEdit = () => {
 
                                         <div className="mb-4">
                                             <label htmlFor="gender" className="block text-gray-700 font-medium mb-2">
-                                                Gender
+                                                Gender <span className="text-red-500">*</span>
                                             </label>
                                             <Field
                                                 as="select"
@@ -200,7 +176,7 @@ const ProfileEdit = () => {
 
                                         <div className="mb-4">
                                             <label htmlFor="sexualPreference" className="block text-gray-700 font-medium mb-2">
-                                                Sexual Preference
+                                                Sexual Preference <span className="text-red-500">*</span>
                                             </label>
                                             <Field
                                                 as="select"
@@ -217,7 +193,7 @@ const ProfileEdit = () => {
 
                                         <div className="mb-4">
                                             <label htmlFor="birthDate" className="block text-gray-700 font-medium mb-2">
-                                                Birth Date
+                                                Birth Date <span className="text-red-500">*</span>
                                             </label>
                                             <Field
                                                 type="date"
@@ -232,40 +208,27 @@ const ProfileEdit = () => {
                                     {/* Location Information */}
                                     <div>
                                         <h2 className="text-lg font-semibold text-gray-800 mb-4">Location</h2>
+                                        <p className="text-gray-600 mb-4">
+                                            We use your location to suggest matches near you. You can either:
+                                        </p>
 
-                                        <div className="mb-4">
-                                            <label htmlFor="latitude" className="block text-gray-700 font-medium mb-2">
-                                                Latitude
-                                            </label>
-                                            <Field
-                                                type="number"
-                                                step="0.000001"
-                                                name="latitude"
-                                                id="latitude"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Latitude"
-                                            />
-                                            <ErrorMessage name="latitude" component="div" className="text-red-500 text-sm mt-1" />
-                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleGetLocation(setFieldValue)}
+                                            className="mb-4 w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center"
+                                        >
+                                            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            Use My Current Location
+                                        </button>
 
-                                        <div className="mb-4">
-                                            <label htmlFor="longitude" className="block text-gray-700 font-medium mb-2">
-                                                Longitude
-                                            </label>
-                                            <Field
-                                                type="number"
-                                                step="0.000001"
-                                                name="longitude"
-                                                id="longitude"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Longitude"
-                                            />
-                                            <ErrorMessage name="longitude" component="div" className="text-red-500 text-sm mt-1" />
-                                        </div>
+                                        <p className="text-gray-600 mb-4">Or enter your location manually:</p>
 
                                         <div className="mb-4">
                                             <label htmlFor="lastLocation" className="block text-gray-700 font-medium mb-2">
-                                                Location Name
+                                                City/Region
                                             </label>
                                             <Field
                                                 type="text"
@@ -277,13 +240,37 @@ const ProfileEdit = () => {
                                             <ErrorMessage name="lastLocation" component="div" className="text-red-500 text-sm mt-1" />
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => handleGetLocation(setFieldValue)}
-                                            className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors duration-200"
-                                        >
-                                            Get Current Location
-                                        </button>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="mb-4">
+                                                <label htmlFor="latitude" className="block text-gray-700 font-medium mb-2">
+                                                    Latitude
+                                                </label>
+                                                <Field
+                                                    type="number"
+                                                    step="0.000001"
+                                                    name="latitude"
+                                                    id="latitude"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Latitude"
+                                                />
+                                                <ErrorMessage name="latitude" component="div" className="text-red-500 text-sm mt-1" />
+                                            </div>
+
+                                            <div className="mb-4">
+                                                <label htmlFor="longitude" className="block text-gray-700 font-medium mb-2">
+                                                    Longitude
+                                                </label>
+                                                <Field
+                                                    type="number"
+                                                    step="0.000001"
+                                                    name="longitude"
+                                                    id="longitude"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Longitude"
+                                                />
+                                                <ErrorMessage name="longitude" component="div" className="text-red-500 text-sm mt-1" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -301,27 +288,32 @@ const ProfileEdit = () => {
                                             id="bio"
                                             rows="5"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                            placeholder="Tell us about yourself..."
+                                            placeholder="Tell others about yourself..."
                                         />
                                         <ErrorMessage name="bio" component="div" className="text-red-500 text-sm mt-1" />
+                                        <p className="text-gray-500 text-sm mt-1">
+                                            {values.bio ? `${values.bio.length}/500 characters` : '0/500 characters'}
+                                        </p>
                                     </div>
                                 </div>
 
                                 {/* Submit Button */}
                                 <div className="flex justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate('/profile')}
-                                        className="mr-2 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors duration-200"
-                                    >
-                                        Cancel
-                                    </button>
+                                    {!isNewProfile && (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/profile')}
+                                            className="mr-4 px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
                                     <button
                                         type="submit"
                                         disabled={isSubmitting || savingProfile}
-                                        className="bg-indigo-600 text-white py-2 px-6 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                                        className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                     >
-                                        {savingProfile ? 'Saving...' : 'Save Changes'}
+                                        {savingProfile ? 'Saving...' : isNewProfile ? 'Continue' : 'Save Changes'}
                                     </button>
                                 </div>
                             </Form>
@@ -330,70 +322,24 @@ const ProfileEdit = () => {
                 </div>
             </div>
 
-            {/* Interests/Tags Section */}
-            <div className="mt-8 bg-white rounded-lg shadow-md overflow-hidden">
-                <div className="px-8 py-6 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-800">Interests</h2>
-                </div>
-
-                <div className="p-8">
-                    <div className="mb-6">
-                        <label htmlFor="newTag" className="block text-gray-700 font-medium mb-2">
-                            Add Interest Tag
-                        </label>
-                        <div className="flex">
-                            <input
-                                type="text"
-                                id="newTag"
-                                value={newTag}
-                                onChange={(e) => setNewTag(e.target.value)}
-                                placeholder="#fitness"
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleAddTag}
-                                disabled={loadingTags || !newTag.trim()}
-                                className="bg-indigo-600 text-white py-2 px-4 rounded-r-md hover:bg-indigo-700 transition-colors duration-200 disabled:bg-indigo-300"
-                            >
-                                {loadingTags ? 'Adding...' : 'Add'}
-                            </button>
+            {/* Only show the photo management and tags sections if this is not a new profile */}
+            {!isNewProfile && (
+                <>
+                    {/* Tags Section */}
+                    <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                        <div className="px-8 py-6 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold text-gray-800">Interests & Tags</h2>
                         </div>
-                        <p className="text-gray-500 text-sm mt-1">
-                            Tags must start with # and contain only letters and numbers (e.g., #fitness, #travel).
-                        </p>
+
+                        <div className="p-8">
+                            <TagsInput userId={user.id} initialTags={profile.tags || []} />
+                        </div>
                     </div>
 
-                    <div>
-                        <h3 className="text-md font-medium text-gray-700 mb-3">Your Tags</h3>
-                        {profile.tags && profile.tags.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                                {profile.tags.map(tag => (
-                                    <div
-                                        key={tag.tag_id}
-                                        className="flex items-center bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
-                                    >
-                                        <span>{tag.tag_name}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveTag(tag.tag_id)}
-                                            className="ml-2 text-indigo-500 hover:text-indigo-700 focus:outline-none"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-gray-500">No tags added yet. Add some interests to help match with similar users.</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Photo Management Section - This will be added in the next step */}
+                    {/* Photo Management Section */}
+                    <PhotoManagement />
+                </>
+            )}
         </div>
     );
 };
