@@ -5,9 +5,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
-const http = require('http');
-const socketIO = require('socket.io');
-// Required to add socket.io to package.json dependencies
 
 // Import database connection
 const { sequelize, initializeDatabase } = require('./config/database');
@@ -18,29 +15,11 @@ const models = require('./models');
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const browseRoutes = require('./routes/browseRoutes');
-const interactionRoutes = require('./routes/interactionRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
-const chatRoutes = require('./routes/chatRoutes');
+const likeRoutes = require('./routes/likeRoutes');
 
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Create HTTP server
-const server = http.createServer(app);
-
-// Initialize Socket.io
-const io = socketIO(server, {
-    cors: {
-        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
-});
-
-// Import socket controller
-const socketController = require('./controllers/socketController');
-socketController(io);
 
 // Middleware
 app.use(cors());
@@ -56,9 +35,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/browse', browseRoutes);
-app.use('/api/interactions', interactionRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/chat', chatRoutes);
+app.use('/api/likes', likeRoutes);
 
 // Test database connection
 app.get('/api/test-db', async (req, res) => {
@@ -104,11 +81,10 @@ const startServer = async () => {
         // Initialize database and sync models
         await initializeDatabase();
 
-        // Start the server (using the HTTP server for Socket.io)
-        server.listen(PORT, () => {
+        // Start the server
+        app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
             console.log(`API is available at http://localhost:${PORT}`);
-            console.log(`Socket.io is running on the same port`);
             console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
         });
     } catch (error) {

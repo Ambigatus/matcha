@@ -1,201 +1,202 @@
 // frontend/src/pages/browse/Browse.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
-import UserCard from '../../components/browse/UserCard';
-import FilterPanel from '../../components/browse/FilterPanel';
+import { toast } from 'react-toastify';
 
 const Browse = () => {
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({
-        ageMin: '',
-        ageMax: '',
-        fameMin: '',
-        fameMax: '',
-        location: '',
-        distance: '',
-        tags: []
-    });
-    const [sorting, setSorting] = useState({
-        sortBy: 'distance',
-        sortDirection: 'asc'
-    });
+    const [error, setError] = useState(null);
 
+    // Fetch suggestions when the component mounts
     useEffect(() => {
+        const fetchSuggestions = async () => {
+            try {
+                setLoading(true);
+                const response = await axios.get('/api/browse/suggestions');
+                setSuggestions(response.data);
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+                setError('Failed to load suggestions. Please try again.');
+                toast.error('Failed to load suggestions');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchSuggestions();
     }, []);
 
-    const fetchSuggestions = async () => {
+    // Handle like/unlike user
+    const handleLikeUser = async (userId) => {
         try {
-            setLoading(true);
-            const response = await axios.get('/api/browse/suggestions');
-            setSuggestions(response.data);
+            await axios.post(`/api/likes/${userId}`);
+            toast.success('User liked successfully!');
+
+            // Update the suggestions list to reflect the like
+            setSuggestions(prevSuggestions =>
+                prevSuggestions.map(suggestion =>
+                    suggestion.userId === userId
+                        ? { ...suggestion, isLiked: true }
+                        : suggestion
+                )
+            );
         } catch (error) {
-            toast.error('Failed to load suggestions. Please try again.');
-            console.error('Error fetching suggestions:', error);
-        } finally {
-            setLoading(false);
+            console.error('Error liking user:', error);
+            toast.error(error.response?.data?.message || 'Failed to like user');
         }
     };
 
-    const handleSearch = async () => {
-        try {
-            setLoading(true);
+    // Calculate age from birth date
+    const calculateAge = (birthDate) => {
+        if (!birthDate) return 'Unknown';
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
 
-            // Build query parameters
-            const params = {};
-            if (filters.ageMin) params.ageMin = filters.ageMin;
-            if (filters.ageMax) params.ageMax = filters.ageMax;
-            if (filters.fameMin) params.fameMin = filters.fameMin;
-            if (filters.fameMax) params.fameMax = filters.fameMax;
-            if (filters.location) params.location = filters.location;
-            if (filters.distance) params.distance = filters.distance;
-            if (filters.tags.length > 0) params.tags = filters.tags;
-
-            // Add sorting
-            params.sortBy = sorting.sortBy;
-            params.sortDirection = sorting.sortDirection;
-
-            const response = await axios.get('/api/browse/search', { params });
-            setSuggestions(response.data);
-        } catch (error) {
-            toast.error('Search failed. Please try again.');
-            console.error('Error searching users:', error);
-        } finally {
-            setLoading(false);
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
         }
+
+        return age;
     };
 
-    const handleFilterChange = (newFilters) => {
-        setFilters(newFilters);
+    // Format distance
+    const formatDistance = (distance) => {
+        if (distance === null) return 'Unknown';
+        if (distance < 1) return `${Math.round(distance * 1000)} m`;
+        return `${Math.round(distance)} km`;
     };
 
-    const handleSortChange = (newSorting) => {
-        setSorting(newSorting);
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
+            </div>
+        );
+    }
 
-        // Apply new sorting to current results
-        const sortedResults = [...suggestions].sort((a, b) => {
-            let compareA, compareB;
-
-            switch (newSorting.sortBy) {
-                case 'age':
-                    const getAge = (birthDate) => {
-                        if (!birthDate) return 0;
-                        const today = new Date();
-                        const birth = new Date(birthDate);
-                        let age = today.getFullYear() - birth.getFullYear();
-                        const monthDiff = today.getMonth() - birth.getMonth();
-                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-                            age--;
-                        }
-                        return age;
-                    };
-                    compareA = getAge(a.profile.birthDate);
-                    compareB = getAge(b.profile.birthDate);
-                    break;
-                case 'distance':
-                    compareA = parseFloat(a.distance);
-                    compareB = parseFloat(b.distance);
-                    break;
-                case 'fame':
-                    compareA = a.profile.fameRating;
-                    compareB = b.profile.fameRating;
-                    break;
-                case 'commonTags':
-                    compareA = a.commonTagCount || 0;
-                    compareB = b.commonTagCount || 0;
-                    break;
-                case 'matchScore':
-                    compareA = a.matchScore || 0;
-                    compareB = b.matchScore || 0;
-                    break;
-                default:
-                    return 0;
-            }
-
-            return newSorting.sortDirection === 'asc' ? compareA - compareB : compareB - compareA;
-        });
-
-        setSuggestions(sortedResults);
-    };
+    if (error) {
+        return (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded my-4">
+                <p>{error}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 bg-red-500 text-white py-1 px-3 rounded hover:bg-red-600 transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-6xl mx-auto">
-            <div className="flex flex-col md:flex-row gap-6">
-                {/* Left sidebar for filters */}
-                <div className="w-full md:w-80 lg:w-96">
-                    <FilterPanel
-                        filters={filters}
-                        onFilterChange={handleFilterChange}
-                        sorting={sorting}
-                        onSortChange={handleSortChange}
-                        onSearch={handleSearch}
-                    />
+        <div className="max-w-6xl mx-auto px-4 py-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">Browse Matches</h1>
+
+            {suggestions.length === 0 ? (
+                <div className="bg-gray-100 p-6 rounded-lg text-center">
+                    <h2 className="text-xl font-semibold text-gray-700 mb-2">No matches found</h2>
+                    <p className="text-gray-600">
+                        Complete your profile and add more information to get better matches.
+                    </p>
+                    <Link
+                        to="/profile/edit"
+                        className="mt-4 inline-block bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition-colors"
+                    >
+                        Update Profile
+                    </Link>
                 </div>
-
-                {/* Main content area */}
-                <div className="flex-1">
-                    <div className="mb-6 flex justify-between items-center">
-                        <h1 className="text-2xl font-bold text-gray-800">
-                            {filters.ageMin || filters.ageMax || filters.location || filters.tags.length > 0
-                                ? 'Search Results'
-                                : 'Suggested Matches'}
-                        </h1>
-
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={fetchSuggestions}
-                                className="text-indigo-600 hover:text-indigo-800 flex items-center"
-                                title="Refresh suggestions"
-                            >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                <span className="ml-1 hidden sm:inline">Refresh</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div className="flex justify-center items-center h-64">
-                            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
-                        </div>
-                    ) : suggestions.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {suggestions.map(user => (
-                                <UserCard
-                                    key={user.userId}
-                                    user={user}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-                            <div className="text-gray-400 mb-4">
-                                <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {suggestions.map(user => (
+                        <div key={user.userId} className="bg-white rounded-lg shadow-md overflow-hidden">
+                            {/* User Photo */}
+                            <div className="aspect-w-1 aspect-h-1">
+                                {user.profilePicture ? (
+                                    <img
+                                        src={`/${user.profilePicture}`}
+                                        alt={`${user.firstName} ${user.lastName}`}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                                        <span className="text-4xl font-bold text-gray-400">
+                                            {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
-                            <h3 className="text-xl font-medium text-gray-700 mb-2">No matches found</h3>
-                            <p className="text-gray-500 mb-4">
-                                {filters.ageMin || filters.ageMax || filters.location || filters.tags.length > 0
-                                    ? 'Try broadening your search criteria or try again later.'
-                                    : 'Try updating your profile with more information to get better matches.'}
-                            </p>
-                            <div className="flex justify-center">
-                                <Link
-                                    to="/profile/edit"
-                                    className="text-indigo-600 hover:text-indigo-800 font-medium"
-                                >
-                                    Update your profile
-                                </Link>
+
+                            {/* User Info */}
+                            <div className="p-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-gray-800">
+                                            {user.firstName} {user.lastName}
+                                        </h2>
+                                        <p className="text-gray-600">@{user.username}</p>
+                                    </div>
+                                    <div className="flex items-center">
+                                        {user.isOnline ? (
+                                            <span className="inline-block h-3 w-3 bg-green-500 rounded-full mr-1"></span>
+                                        ) : (
+                                            <span className="inline-block h-3 w-3 bg-gray-300 rounded-full mr-1"></span>
+                                        )}
+                                        <span className="text-sm text-gray-500">
+                                            {user.isOnline ? 'Online' : 'Offline'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <span className="text-gray-600">Age:</span>{' '}
+                                        <span className="font-medium">{calculateAge(user.birthDate)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600">Location:</span>{' '}
+                                        <span className="font-medium">{user.location || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600">Distance:</span>{' '}
+                                        <span className="font-medium">{formatDistance(user.distance)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600">Fame:</span>{' '}
+                                        <span className="font-medium">{user.fameRating?.toFixed(0) || 0}/100</span>
+                                    </div>
+                                </div>
+
+                                {user.commonTagsCount > 0 && (
+                                    <div className="mt-3">
+                                        <span className="text-gray-600 text-sm">
+                                            {user.commonTagsCount} common interest{user.commonTagsCount !== 1 ? 's' : ''}
+                                        </span>
+                                    </div>
+                                )}
+
+                                <div className="mt-4 flex justify-between">
+                                    <Link
+                                        to={`/browse/profile/${user.userId}`}
+                                        className="bg-indigo-100 text-indigo-700 py-2 px-4 rounded hover:bg-indigo-200 transition-colors"
+                                    >
+                                        View Profile
+                                    </Link>
+                                    <button
+                                        onClick={() => handleLikeUser(user.userId)}
+                                        className="bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition-colors"
+                                    >
+                                        {user.isLiked ? 'Liked' : 'Like'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    )}
+                    ))}
                 </div>
-            </div>
+            )}
         </div>
     );
 };

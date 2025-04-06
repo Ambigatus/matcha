@@ -1,14 +1,27 @@
 // frontend/src/components/layout/Header.js
-import React, { useContext, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useContext, useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext';
+import axios from 'axios';
 
 const Header = () => {
     const { isAuthenticated, user, logout } = useContext(AuthContext);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [notificationCount, setNotificationCount] = useState(0);
+    const location = useLocation();
+
+    // Fetch notification count when user is authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            // Placeholder for future notification system
+            // In a real implementation, we would fetch notifications from the server
+            setNotificationCount(0);
+        }
+    }, [isAuthenticated, location.pathname]);
 
     const handleLogout = () => {
         logout();
+        setIsMenuOpen(false);
     };
 
     return (
@@ -47,18 +60,61 @@ const Header = () => {
 
                     {/* Desktop navigation */}
                     <nav className="hidden md:flex items-center space-x-6">
-                        <Link to="/" className="text-gray-700 hover:text-indigo-600 transition-colors duration-200">
+                        <Link
+                            to="/"
+                            className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                location.pathname === '/' ? 'text-indigo-600 font-medium' : ''
+                            }`}
+                        >
                             Home
                         </Link>
 
                         {isAuthenticated ? (
                             <>
-                                <Link to="/profile" className="text-gray-700 hover:text-indigo-600 transition-colors duration-200">
-                                    Profile
-                                </Link>
-                                <Link to="/browse" className="text-gray-700 hover:text-indigo-600 transition-colors duration-200">
+                                <Link
+                                    to="/browse"
+                                    className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                        location.pathname === '/browse' ? 'text-indigo-600 font-medium' : ''
+                                    }`}
+                                >
                                     Browse
                                 </Link>
+
+                                <Link
+                                    to="/matches"
+                                    className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                        location.pathname === '/matches' ? 'text-indigo-600 font-medium' : ''
+                                    }`}
+                                >
+                                    Matches
+                                </Link>
+
+                                <Link
+                                    to="/profile"
+                                    className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                        location.pathname === '/profile' ? 'text-indigo-600 font-medium' : ''
+                                    }`}
+                                >
+                                    Profile
+                                </Link>
+
+                                <div className="relative">
+                                    <Link
+                                        to="/notifications"
+                                        className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                        </svg>
+
+                                        {notificationCount > 0 && (
+                                            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+                                                {notificationCount}
+                                            </span>
+                                        )}
+                                    </Link>
+                                </div>
+
                                 <div className="relative group">
                                     <button className="flex items-center text-gray-700 hover:text-indigo-600 focus:outline-none">
                                         <span>{user ? user.username : 'Account'}</span>
@@ -66,13 +122,22 @@ const Header = () => {
                                             <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                                         </svg>
                                     </button>
+
                                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 hidden group-hover:block">
-                                        <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-500 hover:text-white">
+                                        <Link
+                                            to="/profile"
+                                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-500 hover:text-white"
+                                        >
                                             Your Profile
                                         </Link>
-                                        <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-500 hover:text-white">
-                                            Settings
+
+                                        <Link
+                                            to="/profile/edit"
+                                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-500 hover:text-white"
+                                        >
+                                            Edit Profile
                                         </Link>
+
                                         <button
                                             onClick={handleLogout}
                                             className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-500 hover:text-white"
@@ -86,10 +151,13 @@ const Header = () => {
                             <>
                                 <Link
                                     to="/login"
-                                    className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+                                    className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                        location.pathname === '/login' ? 'text-indigo-600 font-medium' : ''
+                                    }`}
                                 >
                                     Sign in
                                 </Link>
+
                                 <Link
                                     to="/register"
                                     className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
@@ -107,7 +175,9 @@ const Header = () => {
                         <nav className="flex flex-col space-y-2">
                             <Link
                                 to="/"
-                                className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+                                className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                    location.pathname === '/' ? 'text-indigo-600 font-medium' : ''
+                                }`}
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 Home
@@ -116,31 +186,58 @@ const Header = () => {
                             {isAuthenticated ? (
                                 <>
                                     <Link
-                                        to="/profile"
-                                        className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
-                                        onClick={() => setIsMenuOpen(false)}
-                                    >
-                                        Profile
-                                    </Link>
-                                    <Link
                                         to="/browse"
-                                        className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+                                        className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                            location.pathname === '/browse' ? 'text-indigo-600 font-medium' : ''
+                                        }`}
                                         onClick={() => setIsMenuOpen(false)}
                                     >
                                         Browse
                                     </Link>
+
                                     <Link
-                                        to="/settings"
+                                        to="/matches"
+                                        className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                            location.pathname === '/matches' ? 'text-indigo-600 font-medium' : ''
+                                        }`}
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Matches
+                                    </Link>
+
+                                    <Link
+                                        to="/profile"
+                                        className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                            location.pathname === '/profile' ? 'text-indigo-600 font-medium' : ''
+                                        }`}
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Profile
+                                    </Link>
+
+                                    <Link
+                                        to="/notifications"
+                                        className="text-gray-700 hover:text-indigo-600 transition-colors duration-200 flex items-center"
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Notifications
+                                        {notificationCount > 0 && (
+                                            <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
+                                                {notificationCount}
+                                            </span>
+                                        )}
+                                    </Link>
+
+                                    <Link
+                                        to="/profile/edit"
                                         className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
                                         onClick={() => setIsMenuOpen(false)}
                                     >
-                                        Settings
+                                        Edit Profile
                                     </Link>
+
                                     <button
-                                        onClick={() => {
-                                            handleLogout();
-                                            setIsMenuOpen(false);
-                                        }}
+                                        onClick={handleLogout}
                                         className="text-left text-gray-700 hover:text-indigo-600 transition-colors duration-200"
                                     >
                                         Sign out
@@ -150,11 +247,14 @@ const Header = () => {
                                 <>
                                     <Link
                                         to="/login"
-                                        className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+                                        className={`text-gray-700 hover:text-indigo-600 transition-colors duration-200 ${
+                                            location.pathname === '/login' ? 'text-indigo-600 font-medium' : ''
+                                        }`}
                                         onClick={() => setIsMenuOpen(false)}
                                     >
                                         Sign in
                                     </Link>
+
                                     <Link
                                         to="/register"
                                         className="text-gray-700 hover:text-indigo-600 transition-colors duration-200"

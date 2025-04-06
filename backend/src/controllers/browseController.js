@@ -1,7 +1,8 @@
 // backend/src/controllers/browseController.js
-const { User, Profile, Photo, Tag, UserTag, sequelize } = require('../models');
+const { User, Profile, Photo, Tag, UserTag } = require('../models');
+const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
-const geolib = require('geolib'); // We'll need to add this package for distance calculations
+const geolib = require('geolib'); // You'll need to install this package for distance calculations
 
 /**
  * Get profile suggestions based on user preferences and matching criteria
