@@ -55,6 +55,30 @@ exports.register = async (req, res) => {
     }
 };
 
+// Verify user email
+exports.verifyEmail = async (req, res) => {
+    const { token } = req.params;
+
+    try {
+        const user = await User.findOne({
+            where: { verification_token: token }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired verification token' });
+        }
+
+        user.is_verified = true;
+        user.verification_token = null;
+        await user.save();
+
+        res.status(200).json({ message: 'Email verified successfully. You can now log in.' });
+    } catch (error) {
+        console.error('Verification error:', error);
+        res.status(500).json({ message: 'Server error during verification' });
+    }
+};
+
 // Login user
 exports.login = async (req, res) => {
     const { username, password } = req.body;

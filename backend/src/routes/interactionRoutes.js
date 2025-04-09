@@ -19,8 +19,8 @@ router.delete('/block/:userId', interactionController.unblockUser);
 router.post('/report/:userId', interactionController.reportUser);
 
 // Get likes/matches/blocks
-router.get('/likes', interactionController.getMyLikes);
-router.get('/matches', interactionController.getMyMatches);
+router.get('/likes', interactionController.getAllLikes);
+router.get('/matches', interactionController.getMatches);
 router.get('/blocks', interactionController.getBlockedUsers);
 
 module.exports = router;

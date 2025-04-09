@@ -11,7 +11,7 @@ exports.likeUser = async (req, res) => {
 
     try {
         // Validate users
-        if (userId == currentUserId) {
+        if (userId === currentUserId) {
             return res.status(400).json({ message: 'You cannot like yourself' });
         }
 
