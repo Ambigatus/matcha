@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { Photo } = require('../models');
-const {sequelize} = require("../utils/db");
+const { sequelize } = require('../config/database');
 
 // Convert callbacks to promises
 const mkdirAsync = promisify(fs.mkdir);
@@ -21,11 +21,7 @@ const validateFileType = (file) => {
     // Check mime
     const mimetype = filetypes.test(file.mimetype);
 
-    if (mimetype && extname) {
-        return true;
-    } else {
-        return false;
-    }
+    return mimetype && extname;
 };
 
 // Configure storage for file uploads

@@ -1,10 +1,10 @@
-// backend/src/models/index.js
 const User = require('./User');
 const Profile = require('./Profile');
 const Photo = require('./Photo');
 const { Tag, UserTag } = require('./Tag');
 const Like = require('./Like');
 const Match = require('./Match');
+const Notification = require('./Notification');
 
 // User and Profile
 User.hasOne(Profile, {
@@ -26,7 +26,7 @@ Photo.belongsTo(User, {
     as: 'user'
 });
 
-// Profile and Photos (This association was missing)
+// Profile and Photos
 Profile.hasMany(Photo, {
     foreignKey: 'user_id',
     sourceKey: 'user_id',
@@ -92,6 +92,16 @@ Match.belongsTo(User, {
     as: 'user2'
 });
 
+// User and Notifications
+User.hasMany(Notification, {
+    foreignKey: 'user_id',
+    as: 'notifications'
+});
+Notification.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+});
+
 // Export all models
 module.exports = {
     User,
@@ -100,5 +110,6 @@ module.exports = {
     Tag,
     UserTag,
     Like,
-    Match
+    Match,
+    Notification
 };

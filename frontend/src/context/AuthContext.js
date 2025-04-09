@@ -1,5 +1,4 @@
-// frontend/src/context/AuthContext.js
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 // Determine API base URL from environment or use default
@@ -15,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     const [error, setError] = useState(null);
 
     // Set auth token for requests
-    const setAuthToken = (token) => {
+    const setAuthToken = useCallback((token) => {
         if (token) {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             localStorage.setItem('token', token);
@@ -23,10 +22,10 @@ export const AuthProvider = ({ children }) => {
             delete axios.defaults.headers.common['Authorization'];
             localStorage.removeItem('token');
         }
-    };
+    }, []);
 
     // Load user from token
-    const loadUser = async () => {
+    const loadUser = useCallback(async () => {
         if (token) {
             setAuthToken(token);
             try {
@@ -42,10 +41,10 @@ export const AuthProvider = ({ children }) => {
             }
         }
         setLoading(false);
-    };
+    }, [token, setAuthToken]);
 
     // Register user
-    const register = async (formData) => {
+    const register = useCallback(async (formData) => {
         try {
             setLoading(true);
             setError(null);
@@ -57,10 +56,10 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     // Login user
-    const login = async (formData) => {
+    const login = useCallback(async (formData) => {
         try {
             setLoading(true);
             setError(null);
@@ -76,10 +75,10 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [setAuthToken, loadUser]);
 
     // Verify email
-    const verifyEmail = async (token) => {
+    const verifyEmail = useCallback(async (token) => {
         try {
             setLoading(true);
             setError(null);
@@ -91,10 +90,10 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     // Logout user
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             // Try to notify the server about logout
             if (isAuthenticated) {
@@ -108,10 +107,10 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(false);
             setAuthToken(null);
         }
-    };
+    }, [isAuthenticated, setAuthToken]);
 
     // Forgot password
-    const forgotPassword = async (email) => {
+    const forgotPassword = useCallback(async (email) => {
         try {
             setLoading(true);
             setError(null);
@@ -123,10 +122,10 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     // Reset password
-    const resetPassword = async (token, password) => {
+    const resetPassword = useCallback(async (token, password) => {
         try {
             setLoading(true);
             setError(null);
@@ -138,7 +137,7 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     // Set default axios baseURL
     useEffect(() => {
@@ -146,9 +145,7 @@ export const AuthProvider = ({ children }) => {
 
         // Load user when component mounts
         loadUser();
-
-        // eslint-disable-next-line
-    }, []);
+    }, [loadUser]);
 
     return (
         <AuthContext.Provider

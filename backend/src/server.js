@@ -19,7 +19,6 @@ const models = require('./models');
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const browseRoutes = require('./routes/browseRoutes');
-const likeRoutes = require('./routes/likeRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const interactionRoutes = require('./routes/interactionRoutes');
@@ -57,7 +56,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/browse', browseRoutes);
-app.use('/api/likes', likeRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/interactions', interactionRoutes);
@@ -65,7 +63,7 @@ app.use('/api/interactions', interactionRoutes);
 // Initialize Socket.io controller
 require('./controllers/socketController')(io);
 
-// Test database connection
+// Test database connection with better error handling
 app.get('/api/test-db', async (req, res) => {
     try {
         const result = await sequelize.query('SELECT NOW()');
@@ -76,7 +74,10 @@ app.get('/api/test-db', async (req, res) => {
         });
     } catch (error) {
         console.error('Database connection error:', error);
-        res.status(500).json({ error: 'Database connection failed' });
+        res.status(500).json({
+            error: 'Database connection failed',
+            message: error.message
+        });
     }
 });
 
@@ -85,7 +86,8 @@ app.get('/', (req, res) => {
     res.json({
         message: 'Welcome to Matcha API',
         version: '1.0.0',
-        status: 'Online'
+        status: 'Online',
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 

@@ -38,7 +38,10 @@ User.init({
         unique: true,
         validate: {
             len: [3, 50],
-            isAlphanumeric: true
+            isAlphanumeric: true,
+            notNull: {
+                msg: 'Username cannot be null'
+            }
         }
     },
     email: {
@@ -46,7 +49,12 @@ User.init({
         allowNull: false,
         unique: true,
         validate: {
-            isEmail: true
+            isEmail: {
+                msg: 'Please enter a valid email address'
+            },
+            notNull: {
+                msg: 'Email cannot be null'
+            }
         }
     },
     password: {

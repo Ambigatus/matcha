@@ -52,7 +52,12 @@ export const handleApiError = (error, defaultMessage = 'An error occurred. Pleas
                 // Unauthorized - Token expired or invalid
                 if (window.location.pathname !== '/login') {
                     // Only redirect if we're not already on login page
-                    toast.error('Your session has expired. Please login again.');
+                    if (showToast) {
+                        // Use dynamic import to prevent circular dependency
+                        import('react-toastify').then(({ toast }) => {
+                            toast.error('Your session has expired. Please login again.');
+                        });
+                    }
                     localStorage.removeItem('token');
 
                     // Delay redirect slightly to let the toast be visible
