@@ -65,14 +65,14 @@ exports.getSuggestions = async (req, res) => {
             else if (userProfile.sexual_preference === 'bisexual') {
                 // Match with users who would be interested in this user's gender
                 if (userProfile.gender === 'male') {
-                    whereConditions.sexual_preference = { [Op.in]: ['homosexual', 'bisexual'] };
+                    whereConditions.sexual_preference = { [Op.in]: ['homosexual', 'bisexual', 'heterosexual'] };
                 } else if (userProfile.gender === 'female') {
-                    whereConditions.sexual_preference = { [Op.in]: ['heterosexual', 'bisexual'] };
+                    whereConditions.sexual_preference = { [Op.in]: ['homosexual', 'bisexual', 'heterosexual'] };
                 }
             }
         }
 
-        // Get profiles that match the criteria
+        // Get profiles that match the criteria - Fixed association here
         const profiles = await Profile.findAll({
             where: whereConditions,
             include: [
@@ -83,7 +83,7 @@ exports.getSuggestions = async (req, res) => {
                 },
                 {
                     model: Photo,
-                    as: 'photos',
+                    as: 'photos', // This needs to match the association in models/index.js
                     required: false,
                     attributes: ['photo_id', 'file_path', 'is_profile']
                 }
@@ -122,6 +122,9 @@ exports.getSuggestions = async (req, res) => {
                 ) / 1000; // Convert meters to kilometers
             }
 
+            // Get profile picture
+            const profilePicture = profile.photos.find(photo => photo.is_profile);
+
             // Build the suggestion object with all required data
             return {
                 userId: profile.user_id,
@@ -140,7 +143,7 @@ exports.getSuggestions = async (req, res) => {
                 lastLogin: profile.user.last_login,
                 commonTagsCount: commonTags,
                 photos: profile.photos,
-                profilePicture: profile.photos.find(photo => photo.is_profile)?.file_path || null,
+                profilePicture: profilePicture ? profilePicture.file_path : null,
                 // Calculate compatibility score (weighted sum of fame rating, common tags, and inverse distance)
                 compatibilityScore: (
                     (profile.fame_rating / 100) * 0.2 + // 20% weight for fame rating

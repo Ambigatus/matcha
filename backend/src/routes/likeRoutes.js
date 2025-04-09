@@ -11,6 +11,9 @@ router.use(protect);
 router.post('/:targetId', likeController.likeUser);
 router.delete('/:targetId', likeController.unlikeUser);
 
+// Check if two users are matched
+router.get('/match/:targetId', likeController.checkMatch);
+
 // Get users who liked the current user
 router.get('/liked-by', likeController.getLikedBy);
 

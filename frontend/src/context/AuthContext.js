@@ -2,6 +2,9 @@
 import React, { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
+// Determine API base URL from environment or use default
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -31,6 +34,7 @@ export const AuthProvider = ({ children }) => {
                 setUser(res.data);
                 setIsAuthenticated(true);
             } catch (err) {
+                console.error('Error loading user:', err);
                 setToken(null);
                 setUser(null);
                 setIsAuthenticated(false);
@@ -92,7 +96,10 @@ export const AuthProvider = ({ children }) => {
     // Logout user
     const logout = async () => {
         try {
-            await axios.post('/api/auth/logout');
+            // Try to notify the server about logout
+            if (isAuthenticated) {
+                await axios.post('/api/auth/logout');
+            }
         } catch (err) {
             console.error('Logout error:', err);
         } finally {
@@ -135,7 +142,7 @@ export const AuthProvider = ({ children }) => {
 
     // Set default axios baseURL
     useEffect(() => {
-        axios.defaults.baseURL = 'http://localhost:5000';
+        axios.defaults.baseURL = API_BASE_URL;
 
         // Load user when component mounts
         loadUser();
@@ -156,7 +163,8 @@ export const AuthProvider = ({ children }) => {
                 logout,
                 verifyEmail,
                 forgotPassword,
-                resetPassword
+                resetPassword,
+                loadUser
             }}
         >
             {children}

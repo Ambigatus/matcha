@@ -1,69 +1,140 @@
 // frontend/src/pages/chat/Chat.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import io from 'socket.io-client';
+import AuthContext from '../../context/AuthContext';
+import { getImageUrl } from '../../utils/imageUtils'; // Assuming we have this utility
+
+// Get API URL from environment or use default
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const Chat = () => {
     const { matchId } = useParams();
     const navigate = useNavigate();
+    const { token, user } = useContext(AuthContext);
 
     const [match, setMatch] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sendingMessage, setSendingMessage] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [showTypingIndicator, setShowTypingIndicator] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messageListRef = useRef(null);
+    const socketRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
 
-    // Fetch match details and message history
+    // Setup WebSocket connection and fetch messages
     useEffect(() => {
-        const fetchMatchAndMessages = async () => {
-            try {
-                setLoading(true);
-
-                // Fetch match details
-                // Note: This API endpoint doesn't exist yet, we'll implement it later
-                const matchResponse = await axios.get(`/api/chat/matches/${matchId}`);
-                setMatch(matchResponse.data);
-
-                // Fetch messages
-                // Note: This API endpoint doesn't exist yet, we'll implement it later
-                const messagesResponse = await axios.get(`/api/chat/messages/${matchId}`);
-                setMessages(messagesResponse.data);
-
-            } catch (error) {
-                console.error('Error fetching chat data:', error);
-                toast.error('Failed to load chat. Please try again.');
-                navigate('/matches');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchMatchAndMessages();
-
-        // Setup WebSocket connection for real-time chat
-        // This is a placeholder for now - will be implemented later
+        // Create socket connection
         const connectWebSocket = () => {
-            // In a real implementation, we would:
-            // 1. Create a WebSocket connection
-            // 2. Listen for messages
-            // 3. Update the messages state when a new message arrives
+            socketRef.current = io(API_BASE_URL, {
+                auth: { token }
+            });
 
-            // Placeholder for WebSocket connection
-            console.log('WebSocket would connect here...');
+            // Socket event listeners
+            socketRef.current.on('connect', () => {
+                console.log('Socket connected');
+            });
 
-            // Return a cleanup function
+            socketRef.current.on('error', (error) => {
+                console.error('Socket error:', error);
+                toast.error('Connection error. Please try refreshing the page.');
+            });
+
+            socketRef.current.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+            });
+
+            // Listen for new messages
+            socketRef.current.on('new_message', (message) => {
+                if (message.match_id === parseInt(matchId)) {
+                    setMessages(prevMessages => [...prevMessages, {
+                        ...message,
+                        isMine: false
+                    }]);
+
+                    // Mark message as read
+                    socketRef.current.emit('mark_message_read', {
+                        messageId: message.message_id
+                    });
+                }
+            });
+
+            // Listen for typing indicators
+            socketRef.current.on('typing_indicator', (data) => {
+                if (data.matchId === parseInt(matchId)) {
+                    setShowTypingIndicator(data.isTyping);
+                }
+            });
+
+            // Listen for message read status updates
+            socketRef.current.on('message_read', ({ messageId }) => {
+                setMessages(prevMessages =>
+                    prevMessages.map(msg =>
+                        msg.message_id === messageId ? { ...msg, is_read: true } : msg
+                    )
+                );
+            });
+
             return () => {
-                console.log('WebSocket would disconnect here...');
+                if (socketRef.current) {
+                    socketRef.current.disconnect();
+                }
             };
         };
 
         const cleanup = connectWebSocket();
-        return cleanup;
-    }, [matchId, navigate]);
+        fetchMatchAndMessages();
+
+        return () => {
+            cleanup();
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+        };
+    }, [matchId, token, navigate]);
+
+    // Fetch match details and message history
+    const fetchMatchAndMessages = async () => {
+        try {
+            setLoading(true);
+
+            // Fetch match details
+            const matchResponse = await axios.get(`/api/chat/conversations`);
+            const matchData = matchResponse.data.find(m => m.match_id.toString() === matchId);
+
+            if (!matchData) {
+                toast.error('Match not found');
+                navigate('/matches');
+                return;
+            }
+
+            setMatch(matchData);
+
+            // Fetch messages
+            const messagesResponse = await axios.get(`/api/chat/messages/${matchId}`);
+
+            // Add isMine flag to each message
+            const formattedMessages = messagesResponse.data.map(message => ({
+                ...message,
+                isMine: message.sender_id === user.id
+            }));
+
+            setMessages(formattedMessages);
+
+        } catch (error) {
+            console.error('Error fetching chat data:', error);
+            toast.error('Failed to load chat. Please try again.');
+            navigate('/matches');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Scroll to bottom of messages
     useEffect(() => {
@@ -107,6 +178,33 @@ const Chat = () => {
         });
     };
 
+    // Handle typing indicator
+    const handleTyping = () => {
+        if (!isTyping && socketRef.current) {
+            setIsTyping(true);
+            socketRef.current.emit('typing', {
+                matchId: parseInt(matchId),
+                receiverId: match.other_user_id
+            });
+        }
+
+        // Clear existing timeout
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Set new timeout
+        typingTimeoutRef.current = setTimeout(() => {
+            if (isTyping && socketRef.current) {
+                setIsTyping(false);
+                socketRef.current.emit('stop_typing', {
+                    matchId: parseInt(matchId),
+                    receiverId: match.other_user_id
+                });
+            }
+        }, 3000);
+    };
+
     // Send a new message
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -116,14 +214,54 @@ const Chat = () => {
         try {
             setSendingMessage(true);
 
-            // Send the message
-            // Note: This API endpoint doesn't exist yet, we'll implement it later
-            const response = await axios.post(`/api/chat/messages/${matchId}`, {
-                content: newMessage
-            });
+            // Clear typing indicator
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
 
-            // Add the new message to the list
-            setMessages([...messages, response.data]);
+            if (isTyping && socketRef.current) {
+                setIsTyping(false);
+                socketRef.current.emit('stop_typing', {
+                    matchId: parseInt(matchId),
+                    receiverId: match.other_user_id
+                });
+            }
+
+            // Either use socket to send message or HTTP request
+            // Using socket for real-time delivery
+            if (socketRef.current && socketRef.current.connected) {
+                socketRef.current.emit('send_message', {
+                    matchId: parseInt(matchId),
+                    receiverId: match.other_user_id,
+                    content: newMessage
+                });
+
+                // Optimistically add message to UI (will be confirmed by server)
+                const optimisticMessage = {
+                    message_id: `temp-${Date.now()}`,
+                    match_id: parseInt(matchId),
+                    sender_id: user.id,
+                    receiver_id: match.other_user_id,
+                    content: newMessage,
+                    is_read: false,
+                    created_at: new Date().toISOString(),
+                    isMine: true,
+                    pending: true
+                };
+
+                setMessages(prev => [...prev, optimisticMessage]);
+            } else {
+                // Fallback to HTTP if socket isn't connected
+                const response = await axios.post(`/api/chat/messages/${matchId}`, {
+                    content: newMessage
+                });
+
+                // Add the confirmed message to the list
+                setMessages(prev => [...prev, {
+                    ...response.data,
+                    isMine: true
+                }]);
+            }
 
             // Clear the input
             setNewMessage('');
@@ -143,6 +281,17 @@ const Chat = () => {
         );
     }
 
+    if (!match) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64">
+                <p className="text-gray-500 mb-4">This conversation doesn't exist or was deleted.</p>
+                <Link to="/matches" className="text-indigo-600 hover:text-indigo-800">
+                    Return to matches
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-4xl mx-auto">
             {/* Chat Header */}
@@ -154,45 +303,43 @@ const Chat = () => {
                     Back to Matches
                 </Link>
 
-                {match && (
-                    <div className="flex items-center">
-                        <div className="relative">
-                            {match.profilePicture ? (
-                                <img
-                                    src={`/${match.profilePicture}`}
-                                    alt={`${match.firstName} ${match.lastName}`}
-                                    className="h-10 w-10 rounded-full object-cover"
-                                />
-                            ) : (
-                                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                    <span className="text-lg font-medium text-gray-500">
-                                        {match.firstName?.charAt(0)}{match.lastName?.charAt(0)}
-                                    </span>
-                                </div>
-                            )}
+                <div className="flex items-center">
+                    <div className="relative">
+                        {match.profile_picture ? (
+                            <img
+                                src={getImageUrl(match.profile_picture)}
+                                alt={`${match.first_name} ${match.last_name}`}
+                                className="h-10 w-10 rounded-full object-cover"
+                            />
+                        ) : (
+                            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <span className="text-lg font-medium text-gray-500">
+                                    {match.first_name?.charAt(0)}{match.last_name?.charAt(0)}
+                                </span>
+                            </div>
+                        )}
 
-                            {match.isOnline && (
-                                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-white"></span>
-                            )}
-                        </div>
-
-                        <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">
-                                {match.firstName} {match.lastName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                                {match.isOnline ? 'Online' : 'Offline'}
-                            </p>
-                        </div>
-
-                        <Link
-                            to={`/browse/profile/${match.userId}`}
-                            className="ml-4 text-indigo-600 hover:text-indigo-800"
-                        >
-                            View Profile
-                        </Link>
+                        {match.is_online && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-white"></span>
+                        )}
                     </div>
-                )}
+
+                    <div className="ml-3">
+                        <p className="text-sm font-medium text-gray-900">
+                            {match.first_name} {match.last_name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                            {match.is_online ? 'Online' : 'Offline'}
+                        </p>
+                    </div>
+
+                    <Link
+                        to={`/browse/profile/${match.other_user_id}`}
+                        className="ml-4 text-indigo-600 hover:text-indigo-800"
+                    >
+                        View Profile
+                    </Link>
+                </div>
             </div>
 
             {/* Chat Messages */}
@@ -210,24 +357,57 @@ const Chat = () => {
                 ) : (
                     messages.map((message, index) => (
                         <div
-                            key={message.id || index}
+                            key={message.message_id || index}
                             className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}
                         >
                             <div className={`max-w-xs sm:max-w-md lg:max-w-lg px-4 py-2 rounded-lg ${
                                 message.isMine
                                     ? 'bg-indigo-600 text-white rounded-br-none'
                                     : 'bg-white text-gray-800 rounded-bl-none shadow'
-                            }`}>
+                            } ${message.pending ? 'opacity-70' : ''}`}>
                                 <p>{message.content}</p>
-                                <p className={`text-xs mt-1 text-right ${
-                                    message.isMine ? 'text-indigo-200' : 'text-gray-500'
-                                }`}>
-                                    {formatMessageTime(message.createdAt)}
-                                </p>
+                                <div className="flex justify-between items-center mt-1">
+                                    <span className={`text-xs ${
+                                        message.isMine ? 'text-indigo-200' : 'text-gray-500'
+                                    }`}>
+                                        {formatMessageTime(message.created_at)}
+                                    </span>
+
+                                    {message.isMine && (
+                                        <span className="ml-2">
+                                            {message.pending ? (
+                                                <svg className="h-3 w-3 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            ) : message.is_read ? (
+                                                <svg className="h-3 w-3 text-indigo-200" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                </svg>
+                                            ) : (
+                                                <svg className="h-3 w-3 text-indigo-200" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 2a6 6 0 110 12 6 6 0 010-12z" />
+                                                </svg>
+                                            )}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))
                 )}
+
+                {showTypingIndicator && (
+                    <div className="flex justify-start">
+                        <div className="bg-gray-200 text-gray-500 px-4 py-2 rounded-lg rounded-bl-none">
+                            <div className="flex space-x-1">
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75"></div>
+                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} />
             </div>
 
@@ -238,6 +418,7 @@ const Chat = () => {
                         type="text"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={() => handleTyping()}
                         placeholder="Type your message..."
                         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />

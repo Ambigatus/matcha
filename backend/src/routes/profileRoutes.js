@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const profileController = require('../controllers/profileController');
+const photoController = require('../controllers/photoController');
 const { protect } = require('../middleware/auth');
 
 // All profile routes are protected
@@ -15,9 +16,12 @@ router.put('/update', profileController.updateProfile);
 router.post('/tags', profileController.addTag);
 router.delete('/tags/:tagId', profileController.removeTag);
 
-// Photos routes
-router.post('/photos', profileController.uploadPhoto);
-router.put('/photos/:photoId/set-profile', profileController.setProfilePhoto);
-router.delete('/photos/:photoId', profileController.deletePhoto);
+// Photos routes - Using improved photo controller
+router.post('/photos',
+    photoController.uploadPhoto, // Middleware for handling file upload
+    photoController.savePhoto    // Controller for saving to database
+);
+router.put('/photos/:photoId/set-profile', photoController.setProfilePhoto);
+router.delete('/photos/:photoId', photoController.deletePhoto);
 
 module.exports = router;

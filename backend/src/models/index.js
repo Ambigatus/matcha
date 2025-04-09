@@ -26,6 +26,18 @@ Photo.belongsTo(User, {
     as: 'user'
 });
 
+// Profile and Photos (This association was missing)
+Profile.hasMany(Photo, {
+    foreignKey: 'user_id',
+    sourceKey: 'user_id',
+    as: 'photos'
+});
+Photo.belongsTo(Profile, {
+    foreignKey: 'user_id',
+    targetKey: 'user_id',
+    as: 'profile'
+});
+
 // User and Tags (many-to-many)
 User.belongsToMany(Tag, {
     through: UserTag,

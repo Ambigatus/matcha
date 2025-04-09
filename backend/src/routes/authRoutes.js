@@ -14,11 +14,29 @@ router.post('/reset-password/:token', authController.resetPassword);
 // Protected routes
 router.post('/logout', protect, authController.logout);
 
-// Add this to your authRoutes.js file:
-router.get('/test-email', (req, res) => {
+router.get('/test-email', async (req, res) => {
     try {
-        require('../utils/email').sendVerificationEmail('your_test_email@example.com', 'test-token');
-        res.status(200).json({ message: 'Test email sent. Check your inbox and server logs.' });
+        const emailService = require('../utils/email');
+        const result = await emailService.testEmailService();
+
+        if (result.success) {
+            res.status(200).json({
+                message: 'Test email sent successfully.',
+                emailConfig: {
+                    sendGrid: result.sendGrid,
+                    nodemailer: result.nodemailer
+                }
+            });
+        } else {
+            res.status(500).json({
+                message: 'Failed to send test email',
+                error: result.error,
+                emailConfig: {
+                    sendGrid: result.sendGrid,
+                    nodemailer: result.nodemailer
+                }
+            });
+        }
     } catch (error) {
         console.error('Test email error:', error);
         res.status(500).json({ message: 'Error sending test email', error: error.message });

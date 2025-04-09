@@ -51,7 +51,36 @@ User.init({
     },
     password: {
         type: DataTypes.STRING(255),
-        allowNull: false
+        allowNull: false,
+        validate: {
+            // Custom validator for password
+            passwordStrength(value) {
+                // Minimum length
+                if (value.length < 8) {
+                    throw new Error('Password must be at least 8 characters long');
+                }
+
+                // Check for at least one uppercase letter
+                if (!/[A-Z]/.test(value)) {
+                    throw new Error('Password must contain at least one uppercase letter');
+                }
+
+                // Check for at least one lowercase letter
+                if (!/[a-z]/.test(value)) {
+                    throw new Error('Password must contain at least one lowercase letter');
+                }
+
+                // Check for at least one number
+                if (!/\d/.test(value)) {
+                    throw new Error('Password must contain at least one number');
+                }
+
+                // Check for at least one special character
+                if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
+                    throw new Error('Password must contain at least one special character');
+                }
+            }
+        }
     },
     first_name: {
         type: DataTypes.STRING(50),
