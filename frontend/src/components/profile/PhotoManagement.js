@@ -3,7 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
-const PhotoManagement = () => {
+/**
+ * Photo management component for user profiles
+ * Handles uploading, viewing, setting profile picture, and deleting photos
+ */
+const PhotoManagement = ({ onPhotoChange }) => {
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -19,7 +23,13 @@ const PhotoManagement = () => {
         try {
             setLoading(true);
             const response = await axios.get('/api/profile/me');
-            setPhotos(response.data.photos || []);
+            const fetchedPhotos = response.data.photos || [];
+            setPhotos(fetchedPhotos);
+
+            // Notify parent component if provided
+            if (onPhotoChange && typeof onPhotoChange === 'function') {
+                onPhotoChange(fetchedPhotos);
+            }
         } catch (error) {
             toast.error('Failed to load photos. Please try again.');
             console.error('Error fetching photos:', error);
@@ -239,7 +249,7 @@ const PhotoManagement = () => {
                                 <div key={photo.photo_id} className="relative group">
                                     <div className="aspect-w-1 aspect-h-1 rounded-lg overflow-hidden bg-gray-100">
                                         <img
-                                            src={`http://localhost:5000/${photo.file_path}`}
+                                            src={`/${photo.file_path}`}
                                             alt="User gallery"
                                             className="w-full h-full object-cover"
                                         />

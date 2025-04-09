@@ -1,8 +1,8 @@
 // backend/src/controllers/browseController.js
-const { User, Profile, Photo, Tag, UserTag } = require('../models');
+const { User, Profile, Photo, Tag, UserTag, Like, Match } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
-const geolib = require('geolib'); // You'll need to install this package for distance calculations
+const geolib = require('geolib');
 
 /**
  * Get profile suggestions based on user preferences and matching criteria
@@ -11,22 +11,26 @@ exports.getSuggestions = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Get user profile with preferences
+        // Get user profile with preferences and tags in a single query
         const userProfile = await Profile.findOne({
-            where: { user_id: userId }
+            where: { user_id: userId },
+            include: [{
+                model: User,
+                as: 'user',
+                include: [{
+                    model: Tag,
+                    as: 'tags',
+                    through: { attributes: [] }
+                }]
+            }]
         });
 
         if (!userProfile) {
             return res.status(400).json({ message: 'Please complete your profile first' });
         }
 
-        // Get user's tags for compatibility matching
-        const userTags = await UserTag.findAll({
-            where: { user_id: userId },
-            attributes: ['tag_id']
-        });
-
-        const userTagIds = userTags.map(tag => tag.tag_id);
+        // Extract user's tag IDs for compatibility matching
+        const userTagIds = userProfile.user.tags.map(tag => tag.tag_id);
 
         // Build the base query conditions
         let whereConditions = {
@@ -63,47 +67,79 @@ exports.getSuggestions = async (req, res) => {
             }
             // For bisexual users - no gender restrictions, but match preference
             else if (userProfile.sexual_preference === 'bisexual') {
-                // Match with users who would be interested in this user's gender
-                if (userProfile.gender === 'male') {
-                    whereConditions.sexual_preference = { [Op.in]: ['homosexual', 'bisexual', 'heterosexual'] };
-                } else if (userProfile.gender === 'female') {
-                    whereConditions.sexual_preference = { [Op.in]: ['homosexual', 'bisexual', 'heterosexual'] };
-                }
+                // No need to filter by gender
             }
         }
 
-        // Get profiles that match the criteria - Fixed association here
+        // Get blocked users to exclude them from results
+        const blockedUsers = await sequelize.query(`
+            SELECT blocked_id FROM blocked_users WHERE blocker_id = :userId
+            UNION
+            SELECT blocker_id FROM blocked_users WHERE blocked_id = :userId
+        `, {
+            replacements: { userId },
+            type: sequelize.QueryTypes.SELECT
+        });
+
+        const blockedUserIds = blockedUsers.map(u => u.blocked_id || u.blocker_id);
+        if (blockedUserIds.length > 0) {
+            whereConditions.user_id = {
+                ...whereConditions.user_id,
+                [Op.notIn]: blockedUserIds
+            };
+        }
+
+        // Get matching profiles with eager loading to reduce queries
         const profiles = await Profile.findAll({
             where: whereConditions,
             include: [
                 {
                     model: User,
                     as: 'user',
-                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login']
+                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login'],
+                    include: [{
+                        model: Tag,
+                        as: 'tags',
+                        through: { attributes: [] }
+                    }]
                 },
                 {
                     model: Photo,
-                    as: 'photos', // This needs to match the association in models/index.js
-                    required: false,
-                    attributes: ['photo_id', 'file_path', 'is_profile']
+                    as: 'photos',
+                    required: false
                 }
             ]
         });
 
-        // Calculate compatibility scores and add additional data
-        const suggestions = await Promise.all(profiles.map(async (profile) => {
-            // Get the tags for this profile
-            const profileTags = await UserTag.findAll({
-                where: { user_id: profile.user_id },
-                include: [
-                    {
-                        model: Tag,
-                        as: 'tag',
-                        attributes: ['tag_id', 'tag_name']
-                    }
-                ]
-            });
+        // Get all likes at once to determine if user has liked profiles
+        const userLikes = await Like.findAll({
+            where: { liker_id: userId },
+            attributes: ['liked_id']
+        });
+        const likedUserIds = userLikes.map(like => like.liked_id);
 
+        // Get all matches at once
+        const userMatches = await Match.findAll({
+            where: {
+                [Op.or]: [
+                    { user1_id: userId },
+                    { user2_id: userId }
+                ]
+            },
+            attributes: ['match_id', 'user1_id', 'user2_id']
+        });
+
+        // Map of other user IDs to match IDs
+        const matchMap = userMatches.reduce((map, match) => {
+            const otherUserId = match.user1_id === userId ? match.user2_id : match.user1_id;
+            map[otherUserId] = match.match_id;
+            return map;
+        }, {});
+
+        // Calculate match scores and format the response
+        const suggestions = profiles.map(profile => {
+            // Get the profile's tags
+            const profileTags = profile.user.tags || [];
             const profileTagIds = profileTags.map(tag => tag.tag_id);
 
             // Calculate the number of common tags
@@ -125,6 +161,13 @@ exports.getSuggestions = async (req, res) => {
             // Get profile picture
             const profilePicture = profile.photos.find(photo => photo.is_profile);
 
+            // Check if user has liked this profile
+            const isLiked = likedUserIds.includes(profile.user_id);
+
+            // Check if there's a match
+            const isMatch = !!matchMap[profile.user_id];
+            const matchId = matchMap[profile.user_id];
+
             // Build the suggestion object with all required data
             return {
                 userId: profile.user_id,
@@ -142,8 +185,16 @@ exports.getSuggestions = async (req, res) => {
                 lastActive: profile.last_active,
                 lastLogin: profile.user.last_login,
                 commonTagsCount: commonTags,
-                photos: profile.photos,
+                tags: profileTags.map(tag => tag.tag_name),
+                photos: profile.photos.map(photo => ({
+                    photoId: photo.photo_id,
+                    filePath: photo.file_path,
+                    isProfile: photo.is_profile
+                })),
                 profilePicture: profilePicture ? profilePicture.file_path : null,
+                isLiked,
+                isMatch,
+                matchId,
                 // Calculate compatibility score (weighted sum of fame rating, common tags, and inverse distance)
                 compatibilityScore: (
                     (profile.fame_rating / 100) * 0.2 + // 20% weight for fame rating
@@ -151,7 +202,7 @@ exports.getSuggestions = async (req, res) => {
                     (distance !== null ? (1 - Math.min(distance, 100) / 100) * 0.3 : 0) // 30% weight for proximity
                 )
             };
-        }));
+        });
 
         // Sort the suggestions by compatibility score (descending)
         suggestions.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
@@ -176,20 +227,24 @@ exports.getProfile = async (req, res) => {
             return res.status(400).json({ message: 'Please use the profile endpoint to view your own profile' });
         }
 
-        // Get the profile with associated data
+        // Get the profile with all associated data in one query
         const profile = await Profile.findOne({
             where: { user_id: profileId },
             include: [
                 {
                     model: User,
                     as: 'user',
-                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login']
+                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login'],
+                    include: [{
+                        model: Tag,
+                        as: 'tags',
+                        through: { attributes: [] }
+                    }]
                 },
                 {
                     model: Photo,
                     as: 'photos',
-                    required: false,
-                    attributes: ['photo_id', 'file_path', 'is_profile']
+                    required: false
                 }
             ]
         });
@@ -198,23 +253,40 @@ exports.getProfile = async (req, res) => {
             return res.status(404).json({ message: 'Profile not found' });
         }
 
-        // Get tags for this profile
-        const tags = await UserTag.findAll({
-            where: { user_id: profileId },
-            include: [
-                {
-                    model: Tag,
-                    as: 'tag',
-                    attributes: ['tag_id', 'tag_name']
+        // Check if profiles are a match or have liked each other
+        const [likeStatus, matchStatus] = await Promise.all([
+            // Check if viewer has liked profile
+            Like.findOne({
+                where: { liker_id: viewerId, liked_id: profileId }
+            }),
+            // Check if there's a match
+            Match.findOne({
+                where: {
+                    [Op.or]: [
+                        { user1_id: viewerId, user2_id: profileId },
+                        { user1_id: profileId, user2_id: viewerId }
+                    ]
                 }
-            ]
+            })
+        ]);
+
+        // Record a profile view and create notification in one transaction
+        await sequelize.transaction(async (t) => {
+            // Increment view count
+            await Profile.increment('views_count', {
+                where: { user_id: profileId },
+                transaction: t
+            });
+
+            // Create view notification
+            await sequelize.query(`
+                INSERT INTO notifications (user_id, type, from_user_id, is_read, created_at)
+                VALUES (:userId, 'profile_view', :viewerId, false, NOW())
+            `, {
+                replacements: { userId: profileId, viewerId },
+                transaction: t
+            });
         });
-
-        // Record a profile view
-        await Profile.increment('views_count', { where: { user_id: profileId } });
-
-        // Add to view history (this would be a separate table)
-        // To be implemented: ProfileView model
 
         // Compile the response
         const profileData = {
@@ -231,11 +303,18 @@ exports.getProfile = async (req, res) => {
             isOnline: profile.user.is_online,
             lastActive: profile.last_active,
             lastLogin: profile.user.last_login,
-            photos: profile.photos,
-            tags: tags.map(t => ({
-                tagId: t.tag.tag_id,
-                tagName: t.tag.tag_name
-            }))
+            photos: profile.photos.map(photo => ({
+                photoId: photo.photo_id,
+                filePath: photo.file_path,
+                isProfile: photo.is_profile
+            })),
+            tags: profile.user.tags.map(tag => ({
+                tagId: tag.tag_id,
+                tagName: tag.tag_name
+            })),
+            isLiked: !!likeStatus,
+            isMatch: !!matchStatus,
+            matchId: matchStatus ? matchStatus.match_id : null
         };
 
         res.status(200).json(profileData);
@@ -257,36 +336,39 @@ exports.searchUsers = async (req, res) => {
             fameMin,
             fameMax,
             location,
-            tags,
+            tags: tagIds,
             sortBy = 'compatibility',
             sortDirection = 'desc',
             page = 1,
             limit = 20
         } = req.query;
 
-        // Get user profile
+        // Get user profile with tags in a single query
         const userProfile = await Profile.findOne({
-            where: { user_id: userId }
+            where: { user_id: userId },
+            include: [{
+                model: User,
+                as: 'user',
+                include: [{
+                    model: Tag,
+                    as: 'tags',
+                    through: { attributes: [] }
+                }]
+            }]
         });
 
         if (!userProfile) {
             return res.status(400).json({ message: 'Please complete your profile first' });
         }
 
-        // Get user's tags
-        const userTags = await UserTag.findAll({
-            where: { user_id: userId },
-            attributes: ['tag_id']
-        });
-
-        const userTagIds = userTags.map(tag => tag.tag_id);
+        const userTagIds = userProfile.user.tags.map(tag => tag.tag_id);
 
         // Build the WHERE conditions for the query
         let whereConditions = {
             user_id: { [Op.ne]: userId } // Exclude current user
         };
 
-        // Match based on sexual preferences (same logic as in getSuggestions)
+        // Apply sexual preference matching (similar to getSuggestions)
         if (userProfile.gender && userProfile.sexual_preference) {
             // For heterosexual users
             if (userProfile.sexual_preference === 'heterosexual') {
@@ -360,50 +442,71 @@ exports.searchUsers = async (req, res) => {
             whereConditions.last_location = { [Op.iLike]: `%${location}%` };
         }
 
-        // Get profiles matching the criteria
+        // Get all blocked users to exclude them from results
+        const blockedUsers = await sequelize.query(`
+            SELECT blocked_id FROM blocked_users WHERE blocker_id = :userId
+            UNION
+            SELECT blocker_id FROM blocked_users WHERE blocked_id = :userId
+        `, {
+            replacements: { userId },
+            type: sequelize.QueryTypes.SELECT
+        });
+
+        const blockedUserIds = blockedUsers.map(u => u.blocked_id || u.blocker_id);
+        if (blockedUserIds.length > 0) {
+            whereConditions.user_id = {
+                ...whereConditions.user_id,
+                [Op.notIn]: blockedUserIds
+            };
+        }
+
+        // Get profiles matching the criteria with eager loading
         const profiles = await Profile.findAll({
             where: whereConditions,
             include: [
                 {
                     model: User,
                     as: 'user',
-                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login']
+                    attributes: ['user_id', 'username', 'first_name', 'last_name', 'is_online', 'last_login'],
+                    include: [{
+                        model: Tag,
+                        as: 'tags',
+                        through: { attributes: [] }
+                    }]
                 },
                 {
                     model: Photo,
                     as: 'photos',
-                    required: false,
-                    attributes: ['photo_id', 'file_path', 'is_profile']
+                    required: false
                 }
             ]
         });
+
+        // Get user likes to determine if user has liked profiles
+        const userLikes = await Like.findAll({
+            where: { liker_id: userId },
+            attributes: ['liked_id']
+        });
+        const likedUserIds = userLikes.map(like => like.liked_id);
 
         // Process search results
         let searchResults = [];
 
         // Process and add tags filter if needed
-        const tagsToFilter = tags ? tags.split(',').map(tag => parseInt(tag)) : [];
+        const tagsToFilter = tagIds
+            ? (Array.isArray(tagIds) ? tagIds : tagIds.split(',').map(tag => parseInt(tag)))
+            : [];
 
         for (const profile of profiles) {
-            // Get profile tags
-            const profileTags = await UserTag.findAll({
-                where: { user_id: profile.user_id },
-                include: [
-                    {
-                        model: Tag,
-                        as: 'tag',
-                        attributes: ['tag_id', 'tag_name']
-                    }
-                ]
-            });
-
+            // Get profile's tag IDs
+            const profileTags = profile.user.tags || [];
             const profileTagIds = profileTags.map(tag => tag.tag_id);
 
             // Filter by tags if needed
             if (tagsToFilter.length > 0) {
                 // Check if profile has ALL specified tags
                 const hasAllTags = tagsToFilter.every(tagId =>
-                    profileTagIds.includes(tagId)
+                    profileTagIds.includes(parseInt(tagId))
                 );
 
                 if (!hasAllTags) {
@@ -411,7 +514,7 @@ exports.searchUsers = async (req, res) => {
                 }
             }
 
-            // Calculate the number of common tags
+            // Calculate common tags
             const commonTags = userTagIds.filter(tagId =>
                 profileTagIds.includes(tagId)
             ).length;
@@ -426,6 +529,12 @@ exports.searchUsers = async (req, res) => {
                     { latitude: profile.latitude, longitude: profile.longitude }
                 ) / 1000; // Convert meters to kilometers
             }
+
+            // Get profile picture
+            const profilePicture = profile.photos.find(photo => photo.is_profile);
+
+            // Check if user has liked this profile
+            const isLiked = likedUserIds.includes(profile.user_id);
 
             // Add the profile to search results
             searchResults.push({
@@ -443,12 +552,17 @@ exports.searchUsers = async (req, res) => {
                 lastActive: profile.last_active,
                 lastLogin: profile.user.last_login,
                 commonTagsCount: commonTags,
-                tags: profileTags.map(t => ({
-                    tagId: t.tag.tag_id,
-                    tagName: t.tag.tag_name
+                tags: profileTags.map(tag => ({
+                    tagId: tag.tag_id,
+                    tagName: tag.tag_name
                 })),
-                photos: profile.photos,
-                profilePicture: profile.photos.find(photo => photo.is_profile)?.file_path || null,
+                photos: profile.photos.map(photo => ({
+                    photoId: photo.photo_id,
+                    filePath: photo.file_path,
+                    isProfile: photo.is_profile
+                })),
+                profilePicture: profilePicture ? profilePicture.file_path : null,
+                isLiked,
                 compatibilityScore: (
                     (profile.fame_rating / 100) * 0.2 + // 20% weight for fame rating
                     (commonTags / Math.max(userTagIds.length, 1)) * 0.5 + // 50% weight for common tags
@@ -519,7 +633,6 @@ exports.searchUsers = async (req, res) => {
                 pages: Math.ceil(searchResults.length / limit)
             }
         });
-
     } catch (error) {
         console.error('Search users error:', error);
         res.status(500).json({ message: 'Server error searching users' });

@@ -1,19 +1,22 @@
 // frontend/src/components/browse/UserCard.js
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { handleApiError } from '../../utils/errorUtils';
 
 const UserCard = ({ user }) => {
     const [loading, setLoading] = useState(false);
-    const [liked, setLiked] = useState(false);
-    const [isMatch, setIsMatch] = useState(false);
+    const [liked, setLiked] = useState(user.isLiked || false);
+    const [isMatch, setIsMatch] = useState(user.isMatch || false);
+    const [matchId, setMatchId] = useState(user.matchId || null);
 
-    const calculateAge = (birthDate) => {
-        if (!birthDate) return null;
+    // Calculate age once with useMemo
+    const age = useMemo(() => {
+        if (!user.birthDate) return null;
 
         const today = new Date();
-        const birth = new Date(birthDate);
+        const birth = new Date(user.birthDate);
         let age = today.getFullYear() - birth.getFullYear();
         const monthDiff = today.getMonth() - birth.getMonth();
 
@@ -22,51 +25,20 @@ const UserCard = ({ user }) => {
         }
 
         return age;
-    };
+    }, [user.birthDate]);
 
-    const handleLike = async () => {
-        try {
-            setLoading(true);
-            const response = await axios.post(`/api/interactions/like/${user.userId}`);
-            setLiked(true);
+    // Format distance with useMemo
+    const formattedDistance = useMemo(() => {
+        if (user.distance === null) return 'Unknown distance';
+        if (user.distance < 1) return `${Math.round(user.distance * 1000)} m`;
+        return `${Math.round(user.distance)} km`;
+    }, [user.distance]);
 
-            if (response.data.isMatch) {
-                setIsMatch(true);
-                toast.success(`It's a match with ${user.firstName}! You can now start chatting.`);
-            } else {
-                toast.success(`You liked ${user.firstName}`);
-            }
-        } catch (error) {
-            if (error.response?.status === 400) {
-                toast.error(error.response.data.message);
-            } else {
-                toast.error('Failed to like user. Please try again.');
-            }
-            console.error('Error liking user:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Handle last active text with useMemo
+    const lastActiveText = useMemo(() => {
+        if (!user.lastActive && !user.lastLogin) return 'Never logged in';
 
-    const handleUnlike = async () => {
-        try {
-            setLoading(true);
-            await axios.delete(`/api/interactions/like/${user.userId}`);
-            setLiked(false);
-            setIsMatch(false);
-            toast.info(`You unliked ${user.firstName}`);
-        } catch (error) {
-            toast.error('Failed to unlike user. Please try again.');
-            console.error('Error unliking user:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const getLastActiveText = (lastActive) => {
-        if (!lastActive) return 'Never logged in';
-
-        const lastActiveDate = new Date(lastActive);
+        const lastActiveDate = new Date(user.lastActive || user.lastLogin);
         const now = new Date();
         const diffSeconds = Math.floor((now - lastActiveDate) / 1000);
 
@@ -76,9 +48,48 @@ const UserCard = ({ user }) => {
         if (diffSeconds < 604800) return `${Math.floor(diffSeconds / 86400)} days ago`;
 
         return lastActiveDate.toLocaleDateString();
-    };
+    }, [user.lastActive, user.lastLogin]);
 
-    const age = calculateAge(user.profile.birthDate);
+    // Handle like/unlike user with useCallback
+    const handleLikeUser = useCallback(async () => {
+        if (loading) return;
+
+        try {
+            setLoading(true);
+            const response = await axios.post(`/api/likes/${user.userId}`);
+            setLiked(true);
+
+            if (response.data.isMatch) {
+                setIsMatch(true);
+                setMatchId(response.data.matchId);
+                toast.success(`It's a match with ${user.firstName}! You can now start chatting.`);
+            } else {
+                toast.success(`You liked ${user.firstName}`);
+            }
+        } catch (error) {
+            handleApiError(error, 'Failed to like user');
+        } finally {
+            setLoading(false);
+        }
+    }, [loading, user.userId, user.firstName]);
+
+    // Handle unlike user with useCallback
+    const handleUnlikeUser = useCallback(async () => {
+        if (loading) return;
+
+        try {
+            setLoading(true);
+            await axios.delete(`/api/likes/${user.userId}`);
+            setLiked(false);
+            setIsMatch(false);
+            setMatchId(null);
+            toast.info(`You unliked ${user.firstName}`);
+        } catch (error) {
+            handleApiError(error, 'Failed to unlike user');
+        } finally {
+            setLoading(false);
+        }
+    }, [loading, user.userId, user.firstName]);
 
     return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
@@ -86,9 +97,9 @@ const UserCard = ({ user }) => {
                 {/* Profile image */}
                 <Link to={`/browse/profile/${user.userId}`}>
                     <div className="aspect-w-4 aspect-h-5 bg-gray-200">
-                        {user.profilePhoto ? (
+                        {user.profilePicture ? (
                             <img
-                                src={`http://localhost:5000/${user.profilePhoto}`}
+                                src={`/${user.profilePicture}`}
                                 alt={`${user.firstName}'s profile`}
                                 className="object-cover w-full h-full"
                             />
@@ -108,21 +119,24 @@ const UserCard = ({ user }) => {
                         <div className="h-2 w-2 rounded-full bg-white"></div>
                     </div>
                 ) : (
-                    <div className="absolute top-2 right-2 bg-gray-400 rounded-full p-1" title={`Last seen ${getLastActiveText(user.lastActive)}`}>
+                    <div
+                        className="absolute top-2 right-2 bg-gray-400 rounded-full p-1"
+                        title={`Last seen ${lastActiveText}`}
+                    >
                         <div className="h-2 w-2 rounded-full bg-white"></div>
                     </div>
                 )}
 
                 {/* Match score or common tags indicator */}
-                {(user.matchScore || user.commonTagCount > 0) && (
+                {(user.compatibilityScore || user.commonTagsCount > 0) && (
                     <div className="absolute bottom-2 left-2">
-                        {user.matchScore ? (
+                        {user.compatibilityScore ? (
                             <span className="bg-indigo-600 text-white text-xs px-2 py-1 rounded-full">
-                                {Math.round(user.matchScore)}% Match
+                                {Math.round(user.compatibilityScore * 100)}% Match
                             </span>
-                        ) : user.commonTagCount > 0 ? (
+                        ) : user.commonTagsCount > 0 ? (
                             <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">
-                                {user.commonTagCount} Common {user.commonTagCount === 1 ? 'Interest' : 'Interests'}
+                                {user.commonTagsCount} Common {user.commonTagsCount === 1 ? 'Interest' : 'Interests'}
                             </span>
                         ) : null}
                     </div>
@@ -137,13 +151,13 @@ const UserCard = ({ user }) => {
                             {age && <span className="ml-2 text-gray-600 text-base">{age}</span>}
                         </h3>
                         <p className="text-gray-600 text-sm">
-                            {user.distance ? `${user.distance} km away` : user.profile.location || 'Location unknown'}
+                            {user.distance ? formattedDistance : user.location || 'Location unknown'}
                         </p>
                     </div>
 
                     {isMatch ? (
                         <Link
-                            to={`/chat/${user.matchId || ''}`}
+                            to={`/chat/${matchId || ''}`}
                             className="flex items-center justify-center h-10 w-10 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition-colors"
                             title="Send a message"
                         >
@@ -153,7 +167,7 @@ const UserCard = ({ user }) => {
                         </Link>
                     ) : liked ? (
                         <button
-                            onClick={handleUnlike}
+                            onClick={handleUnlikeUser}
                             disabled={loading}
                             className="flex items-center justify-center h-10 w-10 bg-pink-100 text-pink-600 rounded-full hover:bg-pink-200 transition-colors disabled:opacity-50"
                             title="Unlike this user"
@@ -164,7 +178,7 @@ const UserCard = ({ user }) => {
                         </button>
                     ) : (
                         <button
-                            onClick={handleLike}
+                            onClick={handleLikeUser}
                             disabled={loading}
                             className="flex items-center justify-center h-10 w-10 bg-gray-100 text-gray-600 rounded-full hover:bg-pink-100 hover:text-pink-600 transition-colors disabled:opacity-50"
                             title="Like this user"
@@ -177,9 +191,9 @@ const UserCard = ({ user }) => {
                 </div>
 
                 {/* Bio preview */}
-                {user.profile.bio && (
+                {user.bio && (
                     <p className="text-gray-600 text-sm line-clamp-2 mb-3">
-                        {user.profile.bio}
+                        {user.bio}
                     </p>
                 )}
 
@@ -220,4 +234,5 @@ const UserCard = ({ user }) => {
     );
 };
 
-export default UserCard;
+// Add React.memo to prevent unnecessary re-renders
+export default React.memo(UserCard);

@@ -1,70 +1,80 @@
 // backend/src/controllers/notificationController.js
-const { sequelize } = require('../config/database');
+const { User, Notification, Photo, sequelize } = require('../models');
+const { Op } = require('sequelize');
 
-// Get all notifications for the current user
+/**
+ * Get all notifications for the current user
+ */
 exports.getNotifications = async (req, res) => {
     try {
-        const notifications = await sequelize.query(`
-            SELECT 
-                n.notification_id,
-                n.type,
-                n.is_read,
-                n.created_at,
-                n.entity_id,
-                u.user_id as from_user_id,
-                u.username as from_username,
-                u.first_name as from_first_name,
-                u.last_name as from_last_name,
-                p.file_path as from_profile_picture
-            FROM notifications n
-            LEFT JOIN users u ON n.from_user_id = u.user_id
-            LEFT JOIN photos p ON u.user_id = p.user_id AND p.is_profile = true
-            WHERE n.user_id = :userId
-            ORDER BY n.created_at DESC
-            LIMIT 50
-        `, {
-            replacements: { userId: req.user.id },
-            type: sequelize.QueryTypes.SELECT
+        const userId = req.user.id;
+
+        // Using Sequelize ORM instead of raw SQL
+        const notifications = await Notification.findAll({
+            where: { user_id: userId },
+            include: [
+                {
+                    model: User,
+                    as: 'fromUser',
+                    attributes: ['user_id', 'username', 'first_name', 'last_name'],
+                    include: [
+                        {
+                            model: Photo,
+                            as: 'photos',
+                            where: { is_profile: true },
+                            attributes: ['file_path'],
+                            required: false
+                        }
+                    ]
+                }
+            ],
+            order: [['created_at', 'DESC']],
+            limit: 50
         });
 
         // Format the notifications for better client-side use
         const formattedNotifications = notifications.map(notification => {
+            const { id, type, is_read, created_at, entity_id, fromUser } = notification;
             let message = '';
 
-            switch(notification.type) {
+            // Generate message based on notification type
+            switch(type) {
                 case 'like':
-                    message = `${notification.from_first_name} ${notification.from_last_name} liked your profile`;
+                    message = `${fromUser.first_name} ${fromUser.last_name} liked your profile`;
                     break;
                 case 'profile_view':
-                    message = `${notification.from_first_name} ${notification.from_last_name} viewed your profile`;
+                    message = `${fromUser.first_name} ${fromUser.last_name} viewed your profile`;
                     break;
                 case 'match':
-                    message = `You matched with ${notification.from_first_name} ${notification.from_last_name}!`;
+                    message = `You matched with ${fromUser.first_name} ${fromUser.last_name}!`;
                     break;
                 case 'message':
-                    message = `${notification.from_first_name} ${notification.from_last_name} sent you a message`;
+                    message = `${fromUser.first_name} ${fromUser.last_name} sent you a message`;
                     break;
                 case 'unmatch':
-                    message = `${notification.from_first_name} ${notification.from_last_name} unliked your profile`;
+                    message = `${fromUser.first_name} ${fromUser.last_name} unliked your profile`;
                     break;
                 default:
                     message = 'You have a new notification';
             }
 
+            // Create formatted notification object
             return {
                 id: notification.notification_id,
-                type: notification.type,
+                type,
                 message,
-                isRead: notification.is_read,
-                createdAt: notification.created_at,
+                isRead: is_read,
+                createdAt: created_at,
                 fromUser: {
-                    id: notification.from_user_id,
-                    username: notification.from_username,
-                    firstName: notification.from_first_name,
-                    lastName: notification.from_last_name,
-                    profilePicture: notification.from_profile_picture
+                    id: fromUser.user_id,
+                    username: fromUser.username,
+                    firstName: fromUser.first_name,
+                    lastName: fromUser.last_name,
+                    profilePicture: fromUser.photos && fromUser.photos.length > 0
+                        ? fromUser.photos[0].file_path
+                        : null
                 },
-                entityId: notification.entity_id
+                entityId: entity_id
             };
         });
 
@@ -81,18 +91,28 @@ exports.getNotifications = async (req, res) => {
     }
 };
 
-// Mark notification as read
+/**
+ * Mark notification as read
+ */
 exports.markAsRead = async (req, res) => {
     const { notificationId } = req.params;
+    const userId = req.user.id;
 
     try {
-        await sequelize.query(`
-            UPDATE notifications
-            SET is_read = true
-            WHERE notification_id = :notificationId AND user_id = :userId
-        `, {
-            replacements: { notificationId, userId: req.user.id }
+        // Find and update notification using Sequelize ORM
+        const notification = await Notification.findOne({
+            where: {
+                notification_id: notificationId,
+                user_id: userId
+            }
         });
+
+        if (!notification) {
+            return res.status(404).json({ message: 'Notification not found' });
+        }
+
+        notification.is_read = true;
+        await notification.save();
 
         res.status(200).json({ message: 'Notification marked as read' });
     } catch (error) {
@@ -101,16 +121,23 @@ exports.markAsRead = async (req, res) => {
     }
 };
 
-// Mark all notifications as read
+/**
+ * Mark all notifications as read
+ */
 exports.markAllAsRead = async (req, res) => {
+    const userId = req.user.id;
+
     try {
-        await sequelize.query(`
-            UPDATE notifications
-            SET is_read = true
-            WHERE user_id = :userId AND is_read = false
-        `, {
-            replacements: { userId: req.user.id }
-        });
+        // Update all user's unread notifications
+        await Notification.update(
+            { is_read: true },
+            {
+                where: {
+                    user_id: userId,
+                    is_read: false
+                }
+            }
+        );
 
         res.status(200).json({ message: 'All notifications marked as read' });
     } catch (error) {
@@ -119,17 +146,27 @@ exports.markAllAsRead = async (req, res) => {
     }
 };
 
-// Delete a notification
+/**
+ * Delete a notification
+ */
 exports.deleteNotification = async (req, res) => {
     const { notificationId } = req.params;
+    const userId = req.user.id;
 
     try {
-        await sequelize.query(`
-            DELETE FROM notifications
-            WHERE notification_id = :notificationId AND user_id = :userId
-        `, {
-            replacements: { notificationId, userId: req.user.id }
+        // Find and delete notification
+        const notification = await Notification.findOne({
+            where: {
+                notification_id: notificationId,
+                user_id: userId
+            }
         });
+
+        if (!notification) {
+            return res.status(404).json({ message: 'Notification not found' });
+        }
+
+        await notification.destroy();
 
         res.status(200).json({ message: 'Notification deleted' });
     } catch (error) {
@@ -138,14 +175,18 @@ exports.deleteNotification = async (req, res) => {
     }
 };
 
-// Delete all notifications
+/**
+ * Delete all notifications
+ */
 exports.deleteAllNotifications = async (req, res) => {
+    const userId = req.user.id;
+
     try {
-        await sequelize.query(`
-            DELETE FROM notifications
-            WHERE user_id = :userId
-        `, {
-            replacements: { userId: req.user.id }
+        // Delete all user's notifications
+        await Notification.destroy({
+            where: {
+                user_id: userId
+            }
         });
 
         res.status(200).json({ message: 'All notifications deleted' });
