@@ -250,8 +250,8 @@ const FilterPanel = ({ filters, onFilterChange, sorting, onSortChange, onSearch 
                             <option value="distance">Distance</option>
                             <option value="age">Age</option>
                             <option value="fame">Fame Rating</option>
-                            <option value="commonTags">Common Tags</option>
-                            <option value="matchScore">Match Score</option>
+                            <option value="tags">Common Tags</option>
+                            <option value="compatibility">Match Score</option>
                         </select>
 
                         <select

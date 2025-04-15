@@ -15,7 +15,7 @@ exports.getNotifications = async (req, res) => {
             include: [
                 {
                     model: User,
-                    as: 'fromUser',
+                    as: 'from_user', // Use the correct alias as defined in models/index.js
                     attributes: ['user_id', 'username', 'first_name', 'last_name'],
                     include: [
                         {
@@ -34,28 +34,33 @@ exports.getNotifications = async (req, res) => {
 
         // Format the notifications for better client-side use
         const formattedNotifications = notifications.map(notification => {
-            const { id, type, is_read, created_at, entity_id, fromUser } = notification;
+            const { type, is_read, created_at, entity_id, from_user } = notification;
             let message = '';
 
-            // Generate message based on notification type
-            switch(type) {
-                case 'like':
-                    message = `${fromUser.first_name} ${fromUser.last_name} liked your profile`;
-                    break;
-                case 'profile_view':
-                    message = `${fromUser.first_name} ${fromUser.last_name} viewed your profile`;
-                    break;
-                case 'match':
-                    message = `You matched with ${fromUser.first_name} ${fromUser.last_name}!`;
-                    break;
-                case 'message':
-                    message = `${fromUser.first_name} ${fromUser.last_name} sent you a message`;
-                    break;
-                case 'unmatch':
-                    message = `${fromUser.first_name} ${fromUser.last_name} unliked your profile`;
-                    break;
-                default:
-                    message = 'You have a new notification';
+            if (!from_user) {
+                // Handle case where sender doesn't exist (could be deleted)
+                message = 'You have a new notification';
+            } else {
+                // Generate message based on notification type
+                switch(type) {
+                    case 'like':
+                        message = `${from_user.first_name} ${from_user.last_name} liked your profile`;
+                        break;
+                    case 'profile_view':
+                        message = `${from_user.first_name} ${from_user.last_name} viewed your profile`;
+                        break;
+                    case 'match':
+                        message = `You matched with ${from_user.first_name} ${from_user.last_name}!`;
+                        break;
+                    case 'message':
+                        message = `${from_user.first_name} ${from_user.last_name} sent you a message`;
+                        break;
+                    case 'unmatch':
+                        message = `${from_user.first_name} ${from_user.last_name} unliked your profile`;
+                        break;
+                    default:
+                        message = 'You have a new notification';
+                }
             }
 
             // Create formatted notification object
@@ -65,15 +70,15 @@ exports.getNotifications = async (req, res) => {
                 message,
                 isRead: is_read,
                 createdAt: created_at,
-                fromUser: {
-                    id: fromUser.user_id,
-                    username: fromUser.username,
-                    firstName: fromUser.first_name,
-                    lastName: fromUser.last_name,
-                    profilePicture: fromUser.photos && fromUser.photos.length > 0
-                        ? fromUser.photos[0].file_path
+                fromUser: from_user ? {
+                    id: from_user.user_id,
+                    username: from_user.username,
+                    firstName: from_user.first_name,
+                    lastName: from_user.last_name,
+                    profilePicture: from_user.photos && from_user.photos.length > 0
+                        ? from_user.photos[0].file_path
                         : null
-                },
+                } : null,
                 entityId: entity_id
             };
         });

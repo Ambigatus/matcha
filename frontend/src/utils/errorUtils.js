@@ -163,29 +163,3 @@ export const processFieldErrors = (fieldErrors, setErrors) => {
         setErrors(formikErrors);
     }
 };
-
-/**
- * Create an axios interceptor for handling errors
- * @param {AxiosInstance} axiosInstance - Axios instance to add interceptors to
- */
-export const setupAxiosErrorInterceptor = (axiosInstance) => {
-    axiosInstance.interceptors.response.use(
-        (response) => response,
-        (error) => {
-            // Only handle certain errors automatically
-            if (error.response && error.response.status === 401) {
-                // Session expired
-                if (localStorage.getItem('token') &&
-                    window.location.pathname !== '/login' &&
-                    window.location.pathname !== '/register') {
-                    toast.error('Your session has expired. Please login again.');
-                    localStorage.removeItem('token');
-                    window.location.href = '/login';
-                }
-            }
-
-            // Always reject the promise so that local catch blocks can handle specific errors
-            return Promise.reject(error);
-        }
-    );
-};

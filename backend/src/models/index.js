@@ -1,3 +1,4 @@
+// backend/src/models/index.js
 const User = require('./User');
 const Profile = require('./Profile');
 const Photo = require('./Photo');
@@ -92,7 +93,7 @@ Match.belongsTo(User, {
     as: 'user2'
 });
 
-// User and Notifications
+// User and Notifications (recipient)
 User.hasMany(Notification, {
     foreignKey: 'user_id',
     as: 'notifications'
@@ -100,6 +101,16 @@ User.hasMany(Notification, {
 Notification.belongsTo(User, {
     foreignKey: 'user_id',
     as: 'user'
+});
+
+// User and Notifications (sender)
+User.hasMany(Notification, {
+    foreignKey: 'from_user_id',
+    as: 'notifications_sent'
+});
+Notification.belongsTo(User, {
+    foreignKey: 'from_user_id',
+    as: 'from_user'  // This should match the alias used in the controller
 });
 
 // Export all models

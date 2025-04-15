@@ -1,6 +1,6 @@
 // frontend/src/components/layout/Header.js
 import React, { useContext, useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext';
 import axios from 'axios';
 
@@ -9,19 +9,34 @@ const Header = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [notificationCount, setNotificationCount] = useState(0);
     const location = useLocation();
+    const navigate = useNavigate();
 
     // Fetch notification count when user is authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            // Placeholder for future notification system
-            // In a real implementation, we would fetch notifications from the server
-            setNotificationCount(0);
+            const fetchNotifications = async () => {
+                try {
+                    const response = await axios.get('/api/notifications');
+                    setNotificationCount(response.data.unreadCount || 0);
+                } catch (error) {
+                    console.error('Failed to fetch notifications:', error);
+                    // Silent fail - not critical for UX
+                }
+            };
+
+            fetchNotifications();
+
+            // Set up interval to check notifications (every 30 seconds)
+            const interval = setInterval(fetchNotifications, 30000);
+
+            return () => clearInterval(interval);
         }
     }, [isAuthenticated, location.pathname]);
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         setIsMenuOpen(false);
+        navigate('/login');
     };
 
     return (
@@ -77,7 +92,12 @@ const Header = () => {
                                         location.pathname === '/browse' ? 'text-indigo-600 font-medium' : ''
                                     }`}
                                 >
-                                    Browse
+                                    <div className="flex items-center">
+                                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                        Discover
+                                    </div>
                                 </Link>
 
                                 <Link
@@ -86,7 +106,12 @@ const Header = () => {
                                         location.pathname === '/matches' ? 'text-indigo-600 font-medium' : ''
                                     }`}
                                 >
-                                    Matches
+                                    <div className="flex items-center">
+                                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                        </svg>
+                                        Matches
+                                    </div>
                                 </Link>
 
                                 <Link
@@ -95,7 +120,12 @@ const Header = () => {
                                         location.pathname === '/profile' ? 'text-indigo-600 font-medium' : ''
                                     }`}
                                 >
-                                    Profile
+                                    <div className="flex items-center">
+                                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        Profile
+                                    </div>
                                 </Link>
 
                                 <div className="relative">
@@ -192,7 +222,7 @@ const Header = () => {
                                         }`}
                                         onClick={() => setIsMenuOpen(false)}
                                     >
-                                        Browse
+                                        Discover
                                     </Link>
 
                                     <Link

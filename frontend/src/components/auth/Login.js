@@ -1,109 +1,132 @@
-// frontend/src/components/auth/Login.js
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+// frontend/src/pages/auth/Login.js
+import React, { useState, useContext } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Formik, Form, Field, ErrorMessage } from 'formik';
+import * as Yup from 'yup';
+import { toast } from 'react-toastify';
+import AuthContext from '../../context/AuthContext';
+import { handleApiError, processFieldErrors } from '../../utils/errorUtils';
 
 const Login = () => {
-    const [formData, setFormData] = useState({
-        username: '',
-        password: ''
-    });
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [formError, setFormError] = useState('');
+    const { login } = useContext(AuthContext);
     const navigate = useNavigate();
 
-    const { username, password } = formData;
+    // Validation schema
+    const LoginSchema = Yup.object().shape({
+        username: Yup.string().required('Username is required'),
+        password: Yup.string().required('Password is required')
+    });
 
-    const onChange = e => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const onSubmit = async e => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
+    const handleSubmit = async (values, { setSubmitting, setErrors }) => {
         try {
-            const res = await axios.post('/api/auth/login', { username, password });
-            localStorage.setItem('token', res.data.token);
-            navigate('/dashboard');
-        } catch (err) {
-            setError(err.response?.data?.message || 'An error occurred during login');
+            setFormError('');
+            await login(values);
+            toast.success('Login successful!');
+            // Explicitly navigate to profile page after successful login
+            navigate('/profile');
+        } catch (error) {
+            // Handle field-specific errors if available
+            if (error.response?.data?.errors) {
+                processFieldErrors(error.response.data.errors, setErrors);
+            }
+
+            // Set general form error
+            setFormError(
+                error.response?.data?.message ||
+                'Login failed. Please check your credentials and try again.'
+            );
+
+            // Log error for debugging
+            console.error('Login error:', error);
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Sign in to your account
-                    </h2>
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="px-6 py-8">
+                <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">Welcome Back</h2>
+
+                <Formik
+                    initialValues={{
+                        username: '',
+                        password: ''
+                    }}
+                    validationSchema={LoginSchema}
+                    onSubmit={handleSubmit}
+                >
+                    {({ isSubmitting, errors, touched }) => (
+                        <Form>
+                            {formError && (
+                                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                                    {formError}
+                                </div>
+                            )}
+
+                            <div className="mb-4">
+                                <label htmlFor="username" className="block text-gray-700 font-medium mb-2">
+                                    Username
+                                </label>
+                                <Field
+                                    type="text"
+                                    name="username"
+                                    id="username"
+                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                                        errors.username && touched.username ? 'border-red-500' : 'border-gray-300'
+                                    }`}
+                                />
+                                <ErrorMessage name="username" component="div" className="text-red-500 text-sm mt-1" />
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center">
+                                    <label htmlFor="password" className="block text-gray-700 font-medium mb-2">
+                                        Password
+                                    </label>
+                                    <Link to="/forgot-password" className="text-sm text-indigo-600 hover:text-indigo-800">
+                                        Forgot password?
+                                    </Link>
+                                </div>
+                                <Field
+                                    type="password"
+                                    name="password"
+                                    id="password"
+                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                                        errors.password && touched.password ? 'border-red-500' : 'border-gray-300'
+                                    }`}
+                                />
+                                <ErrorMessage name="password" component="div" className="text-red-500 text-sm mt-1" />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+                            >
+                                {isSubmitting ? (
+                                    <div className="flex items-center justify-center">
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Signing in...
+                                    </div>
+                                ) : 'Sign in'}
+                            </button>
+                        </Form>
+                    )}
+                </Formik>
+
+                <div className="text-center mt-6">
+                    <p className="text-gray-600">
+                        Don't have an account?{' '}
+                        <Link to="/register" className="text-indigo-600 hover:text-indigo-800 font-medium">
+                            Create an account
+                        </Link>
+                    </p>
                 </div>
-                {error && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                        {error}
-                    </div>
-                )}
-                <form className="mt-8 space-y-6" onSubmit={onSubmit}>
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div>
-                            <label htmlFor="username" className="sr-only">
-                                Username
-                            </label>
-                            <input
-                                id="username"
-                                name="username"
-                                type="text"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                                placeholder="Username"
-                                value={username}
-                                onChange={onChange}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="password" className="sr-only">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                                placeholder="Password"
-                                value={password}
-                                onChange={onChange}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="text-sm">
-                            <Link to="/forgot-password" className="text-indigo-600 hover:text-indigo-500">
-                                Forgot your password?
-                            </Link>
-                        </div>
-                        <div className="text-sm">
-                            <Link to="/register" className="text-indigo-600 hover:text-indigo-500">
-                                Don't have an account?
-                            </Link>
-                        </div>
-                    </div>
-
-                    <div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                            {loading ? 'Signing in...' : 'Sign in'}
-                        </button>
-                    </div>
-                </form>
             </div>
         </div>
     );

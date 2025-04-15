@@ -13,7 +13,9 @@ const Matches = () => {
         const fetchMatches = async () => {
             try {
                 setLoading(true);
-                const response = await axios.get('/api/likes/matches');
+                // Use the correct endpoint for getting matches
+                const response = await axios.get('/api/interactions/matches');
+                console.log('Matches response:', response.data);
                 setMatches(response.data);
             } catch (error) {
                 console.error('Error fetching matches:', error);
@@ -103,7 +105,7 @@ const Matches = () => {
                         {matches.map((match) => (
                             <li key={match.matchId} className="p-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center space-x-4">
-                                    <div className="flex-shrink-0">
+                                    <div className="flex-shrink-0 relative">
                                         {match.profilePicture ? (
                                             <img
                                                 src={`/${match.profilePicture}`}
@@ -128,7 +130,7 @@ const Matches = () => {
                                             {match.firstName} {match.lastName}
                                         </p>
                                         <p className="text-sm text-gray-500 truncate">
-                                            {match.gender}, {calculateAge(match.birthDate)} • {match.location || 'Unknown location'}
+                                            {match.gender && `${match.gender}, `}{calculateAge(match.birthDate)} • {match.location || 'Unknown location'}
                                         </p>
                                     </div>
 

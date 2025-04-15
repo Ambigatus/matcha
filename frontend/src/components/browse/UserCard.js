@@ -51,27 +51,27 @@ const UserCard = ({ user }) => {
     }, [user.lastActive, user.lastLogin]);
 
     // Handle like/unlike user with useCallback
-    const handleLikeUser = useCallback(async () => {
+    const handleLikeUser = useCallback(async (userId) => {
         if (loading) return;
 
         try {
-            setLoading(true);
-            const response = await axios.post(`/api/likes/${user.userId}`);
-            setLiked(true);
+            // Use the correct API endpoint
+            await axios.post(`/api/interactions/like/${userId}`);
+            toast.success('User liked successfully!');
 
-            if (response.data.isMatch) {
-                setIsMatch(true);
-                setMatchId(response.data.matchId);
-                toast.success(`It's a match with ${user.firstName}! You can now start chatting.`);
-            } else {
-                toast.success(`You liked ${user.firstName}`);
-            }
+            // Update the suggestions list to reflect the like
+            setSuggestions(prevSuggestions =>
+                prevSuggestions.map(suggestion =>
+                    suggestion.userId === userId
+                        ? { ...suggestion, isLiked: true }
+                        : suggestion
+                )
+            );
         } catch (error) {
-            handleApiError(error, 'Failed to like user');
-        } finally {
-            setLoading(false);
+            console.error('Error liking user:', error);
+            toast.error(error.response?.data?.message || 'Failed to like user');
         }
-    }, [loading, user.userId, user.firstName]);
+    }, [loading]);
 
     // Handle unlike user with useCallback
     const handleUnlikeUser = useCallback(async () => {
@@ -79,7 +79,7 @@ const UserCard = ({ user }) => {
 
         try {
             setLoading(true);
-            await axios.delete(`/api/likes/${user.userId}`);
+            await axios.delete(`/api/interactions/like/${user.userId}`);
             setLiked(false);
             setIsMatch(false);
             setMatchId(null);

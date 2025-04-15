@@ -67,7 +67,11 @@ export const AuthProvider = ({ children }) => {
             const { token } = res.data;
             setToken(token);
             setAuthToken(token);
-            await loadUser();
+            await loadUser(); // Load user data after login
+
+            // Set authenticated status to true so other components can react
+            setIsAuthenticated(true);
+
             return res.data;
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred during login');
