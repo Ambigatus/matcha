@@ -1,5 +1,6 @@
 // backend/src/controllers/interactionController.js
-const { User, Profile, Photo, Like, Match, sequelize } = require('../models');
+const { User, Profile, Photo, Like, Match } = require('../models');
+const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 
 /**
@@ -403,7 +404,7 @@ exports.getLikedByUsers = async (req, res) => {
             SELECT u.user_id, u.username, u.first_name, u.last_name, u.is_online, u.last_login,
                    ul.created_at as liked_at,
                    p.file_path as profile_picture
-            FROM user_likes ul
+            FROM likes ul
             JOIN users u ON ul.liker_id = u.user_id
             LEFT JOIN photos p ON u.user_id = p.user_id AND p.is_profile = true
             WHERE ul.liked_id = :userId
@@ -431,7 +432,7 @@ exports.getLikedUsers = async (req, res) => {
             SELECT u.user_id, u.username, u.first_name, u.last_name, u.is_online, u.last_login,
                    ul.created_at as liked_at,
                    p.file_path as profile_picture
-            FROM user_likes ul
+            FROM likes ul
             JOIN users u ON ul.liked_id = u.user_id
             LEFT JOIN photos p ON u.user_id = p.user_id AND p.is_profile = true
             WHERE ul.liker_id = :userId
@@ -460,7 +461,7 @@ exports.getAllLikes = async (req, res) => {
                 SELECT u.user_id, u.username, u.first_name, u.last_name, u.is_online, u.last_login,
                        ul.created_at as liked_at,
                        p.file_path as profile_picture
-                FROM user_likes ul
+                FROM likes ul
                 JOIN users u ON ul.liked_id = u.user_id
                 LEFT JOIN photos p ON u.user_id = p.user_id AND p.is_profile = true
                 WHERE ul.liker_id = :userId
@@ -473,7 +474,7 @@ exports.getAllLikes = async (req, res) => {
                 SELECT u.user_id, u.username, u.first_name, u.last_name, u.is_online, u.last_login,
                        ul.created_at as liked_at,
                        p.file_path as profile_picture
-                FROM user_likes ul
+                FROM likes ul
                 JOIN users u ON ul.liker_id = u.user_id
                 LEFT JOIN photos p ON u.user_id = p.user_id AND p.is_profile = true
                 WHERE ul.liked_id = :userId
@@ -566,7 +567,7 @@ exports.getMatches = async (req, res) => {
                 lastName: match.last_name,
                 age,
                 gender: match.gender,
-                location: match.last_location,
+                location: match.location || match.last_location,
                 fameRating: match.fame_rating,
                 isOnline: match.is_online,
                 lastLogin: match.last_login,

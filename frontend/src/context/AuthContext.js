@@ -1,3 +1,4 @@
+// frontend/src/context/AuthContext.js
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
@@ -29,7 +30,7 @@ export const AuthProvider = ({ children }) => {
         if (token) {
             setAuthToken(token);
             try {
-                const res = await axios.get('/api/profile/me');
+                const res = await axios.get(`${API_BASE_URL}/api/profile/me`);
                 setUser(res.data);
                 setIsAuthenticated(true);
             } catch (err) {
@@ -48,7 +49,7 @@ export const AuthProvider = ({ children }) => {
         try {
             setLoading(true);
             setError(null);
-            const res = await axios.post('/api/auth/register', formData);
+            const res = await axios.post(`${API_BASE_URL}/api/auth/register`, formData);
             return res.data;
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred during registration');
@@ -63,7 +64,7 @@ export const AuthProvider = ({ children }) => {
         try {
             setLoading(true);
             setError(null);
-            const res = await axios.post('/api/auth/login', formData);
+            const res = await axios.post(`${API_BASE_URL}/api/auth/login`, formData);
             const { token } = res.data;
             setToken(token);
             setAuthToken(token);
@@ -86,7 +87,7 @@ export const AuthProvider = ({ children }) => {
         try {
             setLoading(true);
             setError(null);
-            const res = await axios.get(`/api/auth/verify-email/${token}`);
+            const res = await axios.get(`${API_BASE_URL}/api/auth/verify-email/${token}`);
             return res.data;
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred during verification');
@@ -101,7 +102,7 @@ export const AuthProvider = ({ children }) => {
         try {
             // Try to notify the server about logout
             if (isAuthenticated) {
-                await axios.post('/api/auth/logout');
+                await axios.post(`${API_BASE_URL}/api/auth/logout`);
             }
         } catch (err) {
             console.error('Logout error:', err);
@@ -118,7 +119,7 @@ export const AuthProvider = ({ children }) => {
         try {
             setLoading(true);
             setError(null);
-            const res = await axios.post('/api/auth/forgot-password', { email });
+            const res = await axios.post(`${API_BASE_URL}/api/auth/forgot-password`, { email });
             return res.data;
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred');
@@ -133,7 +134,7 @@ export const AuthProvider = ({ children }) => {
         try {
             setLoading(true);
             setError(null);
-            const res = await axios.post(`/api/auth/reset-password/${token}`, { password });
+            const res = await axios.post(`${API_BASE_URL}/api/auth/reset-password/${token}`, { password });
             return res.data;
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred during password reset');
